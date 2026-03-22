@@ -1,11 +1,19 @@
 from decimal import MIN_EMIN, MAX_EMAX
+from typing import Callable
 
 import requests
 import os
 import json
 import datetime
+from dotenv import load_dotenv
+load_dotenv()
 
-def retry(func):
+def retry(func) -> Callable:
+    """
+
+    :param func:
+    :return:
+    """
     def wrapper(*args, **kwargs):
         max_times = 3
         for i in range(max_times):
@@ -18,7 +26,12 @@ def retry(func):
 
 @retry
 def get_crypto_price(symbol: str) -> dict:
-    api_key = os.environ.get("CG_API","CG-PT7xKULi3XkZ5z3ung8Yho3K")
+    """
+
+    :param symbol:
+    :return:
+    """
+    api_key = os.environ.get("CG_API")
     url = "https://api.coingecko.com/api/v3/simple/price"
     params = {
         "ids": symbol,
@@ -45,6 +58,10 @@ def get_crypto_price(symbol: str) -> dict:
 
 @retry
 def get_multiple_prices(coin_list) -> dict:
+    """
+    :param coin_list:
+    :return:
+    """
     api_key = os.environ.get("CG_API", "CG-PT7xKULi3XkZ5z3ung8Yho3K")
     url = "https://api.coingecko.com/api/v3/simple/price"
     ids_list = ",".join(coin_list)
@@ -74,13 +91,22 @@ def get_multiple_prices(coin_list) -> dict:
     return res
 
 def save_to_history(file,record):
+    """
+    :param file:
+    :param record:
+    :return:
+    """
     record["time"] = str(datetime.datetime.now())
     os.makedirs(os.path.dirname(file), exist_ok=True)
     with open(file, "a") as f:
         f.write(json.dumps(record) + "\n")
         print("loaded successfully")
 
-def load_price_history(file):
+def load_price_history(file) -> list:
+    """
+    :param file:
+    :return:
+    """
     try:
         with open(file, "r") as f:
             records = [json.loads(line) for line in f if line.strip()]
@@ -89,7 +115,12 @@ def load_price_history(file):
         print(e)
         return []
 
-def analyze_history(file,coin):
+def analyze_history(file,coin) -> tuple:
+    """
+    :param file:
+    :param coin:
+    :return:
+    """
     records = load_price_history(file)
     max_price = float('-inf')
     min_price = float('inf')
