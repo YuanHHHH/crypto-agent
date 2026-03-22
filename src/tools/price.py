@@ -1,33 +1,19 @@
 from decimal import MIN_EMIN, MAX_EMAX
-from typing import Callable
+
 
 import requests
 import os
 import json
 import datetime
 from dotenv import load_dotenv
+from src.utils.exceptions import APIError, InvalidCoinError
+from src.utils.decorators import retry
 load_dotenv()
 
-def retry(func) -> Callable:
-    """
-
-    :param func:
-    :return:
-    """
-    def wrapper(*args, **kwargs):
-        max_times = 3
-        for i in range(max_times):
-            try:
-                res = func(*args, **kwargs)
-                return res
-            except Exception as e:
-                print(f"第{i+1}次失败：{e}")
-    return wrapper
 
 @retry
 def get_crypto_price(symbol: str) -> dict:
     """
-
     :param symbol:
     :return:
     """
@@ -43,18 +29,22 @@ def get_crypto_price(symbol: str) -> dict:
     }
     coin_price = requests.get(url, params=params, headers=headers)
 
+    if coin_price.status_code != 200:
+        raise APIError(coin_price.status_code)
+
     data = coin_price.json()
-    if symbol in data:
-        coin_data = data[symbol]
-        res = {
-            "symbol":symbol,
-            "price": coin_data.get("usd",0),
-            "change_24h": coin_data.get("usd_24h_change",0)
-        }
-        save_to_history("/Users/haoyuanhuang/PycharmProjects/crypto-agent/data/price_history.jsonl", res)
-        return res
-    else:
-        return None
+
+    if symbol not in data:
+        raise InvalidCoinError(symbol)
+
+    coin_data = data[symbol]
+    res = {
+        "symbol":symbol,
+        "price": coin_data.get("usd",0),
+        "change_24h": coin_data.get("usd_24h_change",0)
+    }
+    save_to_history("/Users/haoyuanhuang/PycharmProjects/crypto-agent/data/price_history.jsonl", res)
+    return res
 
 @retry
 def get_multiple_prices(coin_list) -> dict:
