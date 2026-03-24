@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+
+from src.models import PriceHistory, CoinPrice, MarketOverview
 from src.tools.price import get_crypto_price,load_price_history,get_multiple_prices
 from src.tools.market import get_market_overview
 import os
@@ -10,23 +12,23 @@ app = FastAPI()
 def root():
     return {"message": "Crypto Agent API is running"}
 
-@app.get("/price/{coin}")
+@app.get("/price/{coin}",response_model=CoinPrice)
 def price_endpoint(coin:str):
     result = get_crypto_price(coin)
     return result
 
-@app.get("/prices")
+@app.get("/prices",response_model=list[CoinPrice])
 def prices_endpoint(coins: str):
     coin_list = coins.split(",")
     result = get_multiple_prices(coin_list)
     return result
 
-@app.get("/market")
+@app.get("/market",response_model=MarketOverview)
 def get_market():
     result = get_market_overview()
     return result
 
-@app.get("/history")
+@app.get("/history",response_model=list[PriceHistory])
 def get_coins_history(coin:str = None, limit:int = 20):
     file = os.environ.get("HISTORY_FILE")
     result = load_price_history(file)
