@@ -1,6 +1,3 @@
-from decimal import MIN_EMIN, MAX_EMAX
-
-
 import requests
 import os
 import json
@@ -18,7 +15,8 @@ def get_crypto_price(symbol: str) -> dict:
     :return:
     """
     api_key = os.environ.get("CG_API")
-    url = "https://api.coingecko.com/api/v3/simple/price"
+    cg_base_url = os.environ.get("CG_BASE_URL")
+    url = f"{cg_base_url}/simple/price"
     params = {
         "ids": symbol,
         "vs_currencies": "usd",
@@ -43,7 +41,8 @@ def get_crypto_price(symbol: str) -> dict:
         "price": coin_data.get("usd",0),
         "change_24h": coin_data.get("usd_24h_change",0)
     }
-    save_to_history("/Users/haoyuanhuang/PycharmProjects/crypto-agent/data/price_history.jsonl", res)
+    history_file = os.environ.get("HISTORY_FILE")
+    save_to_history(history_file, res)
     return res
 
 @retry
@@ -52,8 +51,10 @@ def get_multiple_prices(coin_list) -> dict:
     :param coin_list:
     :return:
     """
-    api_key = os.environ.get("CG_API", "CG-PT7xKULi3XkZ5z3ung8Yho3K")
-    url = "https://api.coingecko.com/api/v3/simple/price"
+    api_key = os.environ.get("CG_API")
+    cg_base_url = os.environ.get("CG_BASE_URL")
+    history_file = os.environ.get("HISTORY_FILE")
+    url = f"{cg_base_url}/simple/price"
     ids_list = ",".join(coin_list)
     params = {
         "ids": ids_list,
@@ -77,7 +78,7 @@ def get_multiple_prices(coin_list) -> dict:
                     "change_24h": coin_data.get("usd_24h_change",0)
                 }
             res.append(para)
-            save_to_history("/Users/haoyuanhuang/PycharmProjects/crypto-agent/data/price_history.jsonl",para)
+            save_to_history(history_file,para)
     return res
 
 def save_to_history(file,record):

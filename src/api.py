@@ -1,0 +1,42 @@
+from fastapi import FastAPI
+from src.tools.price import get_crypto_price,load_price_history,get_multiple_prices
+from src.tools.market import get_market_overview
+import os
+from dotenv import load_dotenv
+load_dotenv()
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"message": "Crypto Agent API is running"}
+
+@app.get("/price/{coin}")
+def price_endpoint(coin:str):
+    result = get_crypto_price(coin)
+    return result
+
+@app.get("/prices")
+def prices_endpoint(coins: str):
+    coin_list = coins.split(",")
+    result = get_multiple_prices(coin_list)
+    return result
+
+@app.get("/market")
+def get_market():
+    result = get_market_overview()
+    return result
+
+@app.get("/history")
+def get_coins_history(coin:str = None, limit:int = 20):
+    file = os.environ.get("HISTORY_FILE")
+    result = load_price_history(file)
+    if not coin and not limit:
+        return result
+    elif coin:
+        res = []
+        for i in result:
+            if i["symbol"] == coin:
+                res.append(i)
+        return res[:limit] if limit else res
+    else:
+        return result[:limit] if limit else result

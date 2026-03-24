@@ -10,7 +10,8 @@ def get_market_overview() -> dict:
     """
     :return:
     """
-    url = "https://api.coingecko.com/api/v3/global"
+    cg_base_url = os.environ.get("CG_BASE_URL")
+    url = f"{cg_base_url}/global"
     api_key = os.environ.get("CG_API")
     headers = {
         "x-cg-demo-api-key": api_key,
