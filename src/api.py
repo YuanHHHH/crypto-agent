@@ -5,8 +5,11 @@ from src.tools.price import get_crypto_price,load_price_history,get_multiple_pri
 from src.tools.market import get_market_overview
 import os
 from dotenv import load_dotenv
+from src.exception_handler import register_exception_handlers
+from src.utils.config import HISTORY_FILE
 load_dotenv()
 app = FastAPI()
+register_exception_handlers(app)
 
 @app.get("/")
 def root():
@@ -30,8 +33,7 @@ def get_market():
 
 @app.get("/history",response_model=list[PriceHistory])
 def get_coins_history(coin:str = None, limit:int = 20):
-    file = os.environ.get("HISTORY_FILE")
-    result = load_price_history(file)
+    result = load_price_history(HISTORY_FILE)
     if not coin and not limit:
         return result
     elif coin:

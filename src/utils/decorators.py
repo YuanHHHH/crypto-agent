@@ -1,5 +1,8 @@
 from typing import Callable
 
+from src.utils.exceptions import InvalidCoinError
+
+
 def retry(func) -> Callable:
     """
 
@@ -12,6 +15,8 @@ def retry(func) -> Callable:
             try:
                 res = func(*args, **kwargs)
                 return res
+            except InvalidCoinError:
+                raise
             except Exception as e:
                 print(f"第{i+1}次失败：{e}")
     return wrapper

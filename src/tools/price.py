@@ -5,6 +5,7 @@ import datetime
 from dotenv import load_dotenv
 from src.utils.exceptions import APIError, InvalidCoinError
 from src.utils.decorators import retry
+from src.utils.config import HISTORY_FILE
 load_dotenv()
 
 
@@ -41,8 +42,8 @@ def get_crypto_price(symbol: str) -> dict:
         "price": coin_data.get("usd",0),
         "change_24h": coin_data.get("usd_24h_change",0)
     }
-    history_file = os.environ.get("HISTORY_FILE")
-    save_to_history(history_file, res)
+
+    save_to_history(HISTORY_FILE, res)
     return res
 
 @retry
@@ -53,7 +54,6 @@ def get_multiple_prices(coin_list) -> dict:
     """
     api_key = os.environ.get("CG_API")
     cg_base_url = os.environ.get("CG_BASE_URL")
-    history_file = os.environ.get("HISTORY_FILE")
     url = f"{cg_base_url}/simple/price"
     ids_list = ",".join(coin_list)
     params = {
@@ -78,7 +78,7 @@ def get_multiple_prices(coin_list) -> dict:
                     "change_24h": coin_data.get("usd_24h_change",0)
                 }
             res.append(para)
-            save_to_history(history_file,para)
+            save_to_history(HISTORY_FILE,para)
     return res
 
 def save_to_history(file,record):
