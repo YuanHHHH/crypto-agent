@@ -30,4 +30,4 @@ def llm_client(prompt):
         content = content.split("</think>")[-1].strip()
     content = content.replace("```json", "").replace("```", "").strip()
 
-    print(content)
+    return content

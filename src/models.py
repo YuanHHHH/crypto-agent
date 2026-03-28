@@ -18,3 +18,16 @@ class PriceHistory(BaseModel):
     price: float
     change_24h: float
     time: str
+
+class CoinMarket(BaseModel):
+    symbol: str
+    market_cap: float
+    total_volume: float
+    high_24h: float
+    low_24h: float
+    price_change_24h: float
+    ath: float
+
+class Analysis(BaseModel):
+    symbol: str
+    content: str

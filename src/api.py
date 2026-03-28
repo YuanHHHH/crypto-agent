@@ -1,6 +1,7 @@
 from fastapi import FastAPI
-
-from src.models import PriceHistory, CoinPrice, MarketOverview
+from src.tools.analyzer import analyze_coin
+from src.tools.llm_client import llm_client
+from src.models import PriceHistory, CoinPrice, MarketOverview, Analysis,CoinMarket
 from src.tools.price import get_crypto_price,load_price_history,get_multiple_prices
 from src.tools.market import get_market_overview, get_coin_market
 import os
@@ -45,7 +46,16 @@ def get_coins_history(coin:str = None, limit:int = 20):
     else:
         return result[:limit] if limit else result
 
-@app.get("/coin_market",response_model=dict)
+@app.get("/coin_market",response_model=CoinMarket)
 def coin_market(coin:str):
     result = get_coin_market(coin)
     return result
+
+@app.get("/analyze/{coin}",response_model=Analysis)
+def analyze_endpoint(coin: str):
+    prompt = analyze_coin(coin)
+    res = llm_client(prompt)
+    return {
+        "symbol": coin,
+        "content": res
+    }

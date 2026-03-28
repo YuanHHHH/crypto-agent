@@ -18,7 +18,8 @@ while True:
     elif choice == "3":
         coin = input("AI分析代币，请输入币种名称 (如 bitcoin): ")
         prompt = analyze_coin(coin)
-        llm_client(prompt)
+        res = llm_client(prompt)
+        print(res)
 
     elif choice == "4":
         print("退出")
