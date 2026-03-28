@@ -28,3 +28,27 @@ def get_market_overview() -> dict:
         "active_cryptocurrencies": data["active_cryptocurrencies"],
     }
     return res
+
+@retry
+def get_coin_market(coin_id: str) -> dict:
+    """查询单个币种的详细市场数据"""
+    cg_base_url = os.environ.get("CG_BASE_URL")
+    url = f"{cg_base_url}/coins/markets"
+    api_key = os.environ.get("CG_API")
+    headers = {"x-cg-demo-api-key": api_key}
+    params = {
+        "vs_currency": "usd",
+        "ids": coin_id,
+    }
+    response = requests.get(url, headers=headers, params=params)
+    data = response.json()[0]
+    res = {
+        "symbol": data["symbol"],
+        "market_cap": data["market_cap"],
+        "total_volume": data["total_volume"],
+        "high_24h": data["high_24h"],
+        "low_24h": data["low_24h"],
+        "price_change_24h": data["price_change_24h"],
+        "ath": data["ath"],
+    }
+    return res

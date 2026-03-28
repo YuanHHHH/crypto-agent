@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from src.models import PriceHistory, CoinPrice, MarketOverview
 from src.tools.price import get_crypto_price,load_price_history,get_multiple_prices
-from src.tools.market import get_market_overview
+from src.tools.market import get_market_overview, get_coin_market
 import os
 from dotenv import load_dotenv
 from src.exception_handler import register_exception_handlers
@@ -44,3 +44,8 @@ def get_coins_history(coin:str = None, limit:int = 20):
         return res[:limit] if limit else res
     else:
         return result[:limit] if limit else result
+
+@app.get("/coin_market",response_model=dict)
+def coin_market(coin:str):
+    result = get_coin_market(coin)
+    return result
