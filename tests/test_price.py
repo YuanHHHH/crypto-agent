@@ -1,4 +1,5 @@
 from src.tools.price import get_crypto_price,get_multiple_prices
+
 # 测试函数不接收参数，且要用assert断言来验证结果
 def test_get_crypto_price_valid():
     res = get_crypto_price("bitcoin")

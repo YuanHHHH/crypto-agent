@@ -3,5 +3,16 @@ from src.tools.market import get_coin_market
 def analyze_coin(symbol):
     coin_price = get_crypto_price(symbol)
     coin_market = get_coin_market(symbol)
-    prompt = f"请分析 {symbol} 的当前行情。价格数据：{coin_price}，市场数据：{coin_market}"
+    prompt = (
+        f"请分析 {symbol} 的当前行情。\n\n"
+        f"价格数据：\n"
+        f"- 当前价格: ${coin_price['price']}\n"
+        f"- 24h涨跌幅: {coin_price['change_24h']:.2f}%\n\n"
+        f"市场数据：\n"
+        f"- 市值: ${coin_market['market_cap']:,.0f}\n"
+        f"- 24h成交量: ${coin_market['total_volume']:,.0f}\n"
+        f"- 24h最高价: ${coin_market['high_24h']}\n"
+        f"- 24h最低价: ${coin_market['low_24h']}\n"
+        f"- 历史最高价(ATH): ${coin_market['ath']}\n"
+    )
     return prompt

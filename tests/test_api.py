@@ -40,3 +40,10 @@ def test_coin_market():
     data = response.json()
     assert data["symbol"] == "btc"
     assert data["market_cap"] > 0
+
+def test_analysis():
+    response = client.get("/analyze/bitcoin")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["symbol"] == "bitcoin"
+    assert len(data["content"]) > 0
