@@ -33,3 +33,10 @@ def test_history():
 def test_price_invalid_coin():
     response = client.get("/price/fakecoin123")
     assert response.status_code == 404
+
+def test_coin_market():
+    response = client.get("/coin_market", params={"coin": "bitcoin"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["symbol"] == "btc"
+    assert data["market_cap"] > 0
