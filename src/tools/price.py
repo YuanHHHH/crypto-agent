@@ -11,9 +11,9 @@ load_dotenv()
 
 @retry
 def get_crypto_price(symbol: str) -> dict:
-    """
+    """查询单个加密货币价格
     :param symbol:
-    :return:
+    :return: 包含symbol, price, change_24h的dict
     """
     api_key = os.environ.get("CG_API")
     cg_base_url = os.environ.get("CG_BASE_URL")
@@ -48,9 +48,9 @@ def get_crypto_price(symbol: str) -> dict:
 
 @retry
 def get_multiple_prices(coin_list) -> dict:
-    """
+    """查询多个加密货币的价格
     :param coin_list:
-    :return:
+    :return: 返回多个加密货币的列表，里面包含各代币的symbol, price, change_24h的dict
     """
     api_key = os.environ.get("CG_API")
     cg_base_url = os.environ.get("CG_BASE_URL")
@@ -82,10 +82,10 @@ def get_multiple_prices(coin_list) -> dict:
     return res
 
 def save_to_history(file,record):
-    """
+    """将记录追加到文件，并加入时间戳
     :param file:
     :param record:
-    :return:
+    :return:None
     """
     record["time"] = str(datetime.datetime.now())
     os.makedirs(os.path.dirname(file), exist_ok=True)
@@ -94,9 +94,9 @@ def save_to_history(file,record):
         print("loaded successfully")
 
 def load_price_history(file) -> list:
-    """
+    """加载某个代币的历史记录
     :param file:
-    :return:
+    :return:返回查询到的某个代币的所有记录
     """
     try:
         with open(file, "r") as f:
@@ -107,10 +107,10 @@ def load_price_history(file) -> list:
         return []
 
 def analyze_history(file,coin) -> tuple:
-    """
+    """查询某代币记录里的最小最大值
     :param file:
     :param coin:
-    :return:
+    :return: 返回记录中的最小值最大值
     """
     records = load_price_history(file)
     max_price = float('-inf')
