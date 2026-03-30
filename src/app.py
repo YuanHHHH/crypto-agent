@@ -2,11 +2,15 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.tools.price import get_crypto_price
+from src.tools.price import get_crypto_price,load_price_history
 from src.tools.analyzer import analyze_coin
 from src.tools.llm_client import llm_client
 from src.tools.market import get_market_overview,get_coin_market
 import streamlit as st
+from src.utils.config import HISTORY_FILE
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 st.set_page_config("Crypto Agent",layout="wide")
@@ -19,7 +23,7 @@ with st.sidebar:
 st.title("Crypto Agent")
 
 #「实时分析」|「市场概览」
-tab1, tab2 = st.tabs(["实时分析","市场概览"])
+tab1, tab2, tab3 = st.tabs(["实时分析","市场概览","历史记录"])
 with tab1:
     coins = ["bitcoin", "ethereum", "solana", "dogecoin", "ripple", "cardano"]
     coin_selected = st.selectbox("选择币种", coins)
@@ -74,3 +78,28 @@ with tab2:
                     st.write(f"总成交量: ${detail.get('total_volume', 'N/A'):,.0f}")
     except Exception as e:
         st.error(f"市场数据加载失败: {e}")
+
+
+with tab3:
+    st.subheader("历史查询记录")
+    history_coin_selected = st.selectbox("选择币种", ["全部记录"]+coins,key="history_coins")
+    history_custom_coin = st.text_input("或手动输入币种（留空则用上面的选择）",key="history_custom_coin")
+    history_coin = history_custom_coin.strip() if history_custom_coin.strip() else history_coin_selected
+    limit = st.number_input("显示条数", min_value=1, max_value=100, value=20,key = "history_limit")
+
+    try:
+        with st.spinner("查找历史中"):
+            records = load_price_history(HISTORY_FILE)
+            if history_coin != "全部记录":
+                filtered = [record for record in records if record.get("symbol") == history_coin]
+            else:
+                filtered = records
+            filtered = filtered[:limit]
+
+            if filtered:
+                st.dataframe(filtered)
+                st.write(f"共 {len(filtered)} 条记录")
+            else:
+                st.warning("没有找到相关记录")
+    except Exception as e:
+        st.error(f"加载历史记录失败: {e}")

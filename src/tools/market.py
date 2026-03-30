@@ -2,9 +2,10 @@ import os
 import requests
 from dotenv import load_dotenv
 from src.utils.decorators import retry
-
+import streamlit as st
 load_dotenv()
 
+@st.cache_data(ttl=60)
 @retry
 def get_market_overview() -> dict:
     """

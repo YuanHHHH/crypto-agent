@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from src.utils.exceptions import APIError, InvalidCoinError
 from src.utils.decorators import retry
 from src.utils.config import HISTORY_FILE
+import streamlit as st
 load_dotenv()
 
 
@@ -93,6 +94,7 @@ def save_to_history(file,record):
         f.write(json.dumps(record) + "\n")
         print("loaded successfully")
 
+@st.cache_data(ttl=30)
 def load_price_history(file) -> list:
     """加载某个代币的历史记录
     :param file:
