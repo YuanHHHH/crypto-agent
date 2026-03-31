@@ -1,5 +1,6 @@
 from src.tools.price import get_crypto_price,get_multiple_prices
-
+import pytest
+from src.utils.exceptions import InvalidCoinError
 # 测试函数不接收参数，且要用assert断言来验证结果
 def test_get_crypto_price_valid():
     res = get_crypto_price("bitcoin")
@@ -11,8 +12,8 @@ def test_get_crypto_price_valid():
     assert res["price"] >0
 
 def test_get_crypto_price_invalid():
-    res = get_crypto_price("fakecooooin")
-    assert res is None
+    with pytest.raises(InvalidCoinError):
+        get_crypto_price("fakecooooin")
 
 def test_get_multiple_crypto_price():
     res = get_multiple_prices(["bitcoin", "ethereum"])

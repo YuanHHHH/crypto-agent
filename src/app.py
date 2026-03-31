@@ -1,3 +1,7 @@
+"""
+Crypto Agent Streamlit 前端入口
+启动方式: streamlit run src/app.py
+"""
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
