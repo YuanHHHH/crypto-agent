@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.utils.exceptions import CryptoAgentError,APIError,InvalidCoinError
 
 from src.tools.price import get_crypto_price,load_price_history
 from src.tools.analyzer import analyze_coin
@@ -20,13 +21,18 @@ with st.sidebar:
     st.write("v0.3")
     st.write("AI 加密货币分析助手")
     st.markdown("[GitHub](https://github.com/YuanHHHH/crypto-agent)")
+    mode_choice = st.radio("开发者模式：",["开发模式","正常模式"])
+
 st.title("Crypto Agent")
 
 #「实时分析」|「市场概览」
 tab1, tab2, tab3 = st.tabs(["实时分析","市场概览","历史记录"])
 with tab1:
     coins = ["bitcoin", "ethereum", "solana", "dogecoin", "ripple", "cardano"]
-    coin_selected = st.selectbox("选择币种", coins)
+
+    if "coin_index" not in st.session_state:
+        st.session_state.coin_index = 0
+    coin_selected = st.selectbox("选择币种", coins,index=st.session_state.coin_index)
     custom_coin = st.text_input("或手动输入币种（留空则用上面的选择）")
     coin = custom_coin.strip() if custom_coin.strip() else coin_selected
     col1, col2 = st.columns(2)
@@ -36,9 +42,22 @@ with tab1:
             try:
                 with st.spinner("正在查询价格..."):
                     res = get_crypto_price(coin)
-                    st.write(res)
+                    if coin in coins:
+                        st.session_state.coin_index = coins.index(coin)
+                st.toast(f"{coin} 价格查询完成")
+                st.write(res)
+            except InvalidCoinError as e:
+                st.error("币种不存在，请检查输入")
+                if mode_choice == "开发模式":
+                    st.exception(e)
+            except APIError as e:
+                st.error("CoinGecko API 请求失败，请稍后重试")
+                if mode_choice == "开发模式":
+                    st.exception(e)
             except Exception as e:
-                st.error(f"查询失败: {e}")
+                st.error(f"未知错误: {e}")
+                if mode_choice == "开发模式":
+                    st.exception(e)
 
     with col2:
         if st.button("AI 分析"):
@@ -46,15 +65,29 @@ with tab1:
                 with st.spinner("AI 分析中，请稍候..."):
                     prompt = analyze_coin(coin)
                     st.markdown(llm_client(prompt))
+                    st.success(f"分析成功：{coin}")
+            except InvalidCoinError as e:
+                st.error("币种不存在，请检查输入")
+                if mode_choice == "开发模式":
+                    st.exception(e)
+            except APIError as e:
+                st.error("API 请求失败，请稍后重试")
+                if mode_choice == "开发模式":
+                    st.exception(e)
             except Exception as e:
-                st.error(f"分析失败: {e}")
+                st.error(f"AI 分析失败: {e}")
 
 with tab2:
     try:
         with st.spinner("加载市场数据..."):
 
             st.subheader("全球市场概览")
-            overview = get_market_overview()
+            try:
+                overview = get_market_overview()
+            except APIError as e:
+                st.error("API 请求失败")
+                if mode_choice == "开发模式":
+                    st.exception(e)
             m1, m2, m3 = st.columns(3)
             with m1:
                 st.metric("总市值 (USD)", f"${overview['total_market_cap_usd']:,.0f}")
@@ -65,7 +98,17 @@ with tab2:
 
             st.subheader("单币种详情")
             coin_selected = st.selectbox("选择币种查看详情", coins, key="detail_coin")
-            detail = get_coin_market(coin_selected)
+            try:
+                detail = get_coin_market(coin_selected)
+            except InvalidCoinError as e:
+                st.error("币种不存在")
+                if mode_choice == "开发模式":
+                    st.exception(e)
+            except APIError as e:
+                st.error("API 请求失败")
+                if mode_choice == "开发模式":
+                    st.exception(e)
+
             d1, d2 = st.columns(2)
             with d1:
                 st.metric("24h 涨跌", f"{detail['price_change_24h']}",delta=f"{detail['price_change_24h']:.2f}")
