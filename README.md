@@ -1,6 +1,6 @@
 # Crypto Agent
 
-加密货币 AI 分析 Agent，支持实时价格查询、市场数据分析、AI 智能行情分析。基于 FastAPI + MiniMax LLM 构建。
+加密货币 AI 分析 Agent，支持实时价格查询、市场数据分析、AI 智能行情分析。基于 FastAPI + MiniMax LLM + Streamlit 构建。
 
 学习项目，持续开发中。
 
@@ -11,10 +11,15 @@
 - 全球市场概览（总市值、BTC/ETH 市占率、24h 变化）
 - AI 智能行情分析（MiniMax M2.7 大模型，自动获取数据 + 生成分析报告）
 - 多轮对话 CLI 工具（支持连续追问，LLM 保持上下文）
+- Streamlit Web 界面（三个功能页面，支持开发模式切换）
 - 价格历史记录（JSONL 持久化，支持按币种筛选）
 - 自动生成 API 文档（FastAPI /docs）
 - 自定义异常处理（InvalidCoinError 404、APIError 502）
 - Pydantic 数据模型校验
+
+## 界面截图
+
+![Crypto Agent 界面](docs/screenshot.png)
 
 ## 安装
 
@@ -41,6 +46,20 @@ API Key 申请：
 - MiniMax: https://platform.minimaxi.com
 
 ## 使用
+
+### 启动 Streamlit 界面（推荐）
+
+```bash
+streamlit run src/app.py
+```
+
+启动后浏览器自动打开 http://localhost:8501，界面包含三个页面：
+
+- 「实时分析」：选择或输入币种，查询价格、触发 AI 智能分析
+- 「市场概览」：全球市场数据仪表盘 + 单币种详情（st.metric 涨跌颜色）
+- 「历史记录」：历史查询记录表格，支持按币种筛选和条数控制
+
+侧边栏支持「开发模式/正常模式」切换，开发模式下显示完整错误信息。
 
 ### 启动 API 服务
 
@@ -85,7 +104,10 @@ crypto-agent/
     README.md
     CHANGELOG.md
     requirements.txt
+    docs/
+        screenshot.png          # Streamlit 界面截图
     src/
+        app.py                  # Streamlit 前端入口
         api.py                  # FastAPI HTTP 接口入口
         main.py                 # 终端交互入口
         models.py               # Pydantic 数据模型
@@ -102,6 +124,7 @@ crypto-agent/
     tests/
         test_price.py           # 业务逻辑测试
         test_api.py             # API 接口测试
+        test_analyze.py         # AI 分析测试
     data/
         price_history.jsonl     # 价格历史数据
 ```
@@ -110,6 +133,7 @@ crypto-agent/
 
 - Python 3.9
 - FastAPI + Uvicorn
+- Streamlit
 - Pydantic
 - Requests
 - python-dotenv
@@ -121,12 +145,12 @@ crypto-agent/
 - Week 1: Python 基础、Git、CoinGecko API 接入、FastAPI 基础接口
 - Week 2: Pydantic 模型、异常处理、TestClient 测试、代码重构
 - Week 3: MiniMax LLM API 接入、AI 分析功能、多轮对话、/analyze 接口
+- Week 4: Streamlit 前端界面（三页面 + 仪表盘 + 历史记录 + 错误处理 + 缓存）
 
 ## 后续计划
 
-- 添加 Streamlit 前端界面
+- 手写 ReAct Agent（Tool Use 机制）
 - 接入交易所 API（Binance/OKX）
 - 技术指标计算（RSI/MACD）
-- 手写 ReAct Agent（Tool Use 机制）
 - RAG 知识库（加密研报检索）
 - Docker 容器化部署

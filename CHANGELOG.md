@@ -1,5 +1,57 @@
 # Changelog
 
+## Week 4: Streamlit 前端界面
+
+### Day 1
+
+- 新增 src/app.py，Streamlit 前端入口
+- 实现单币种价格查询页面（st.text_input + st.button + st.spinner）
+- st.set_page_config 设置页面标题和 wide 布局
+
+### Day 2
+
+- 加入 st.selectbox 币种下拉选择（预设 6 个主流币种）
+- 加入 st.text_input 自定义币种输入
+- 接入 AI 分析功能，st.markdown 渲染 LLM 返回的分析报告
+- 加入 st.sidebar 侧边栏（项目信息、版本号、GitHub 链接）
+
+### Day 3
+
+- 新增 st.tabs 多标签页：「实时分析」「市场概览」
+- 市场概览页面：st.metric 展示总市值、BTC 市占率、24h 市值变化（delta 涨跌颜色）
+- 单币种详情：st.columns 两列布局展示价格、涨跌、市值、高低价、ATH
+- 新增 st.expander 折叠面板展示总成交量等补充数据
+
+### Day 4
+
+- 新增「历史记录」tab，st.dataframe 展示 JSONL 历史数据
+- 支持按币种筛选（st.selectbox）和条数控制（st.number_input）
+- 加入 @st.cache_data 缓存：市场概览 ttl=60s，历史记录 ttl=30s
+
+### Day 5
+
+- 异常处理分类：InvalidCoinError / APIError / Exception 分别给出不同提示
+- 加入 st.session_state 记住用户上次选择的币种
+- 加入 st.radio 开发模式/正常模式切换
+- 开发模式下用 st.exception 显示完整 Python traceback
+- 加入 st.toast / st.success 操作反馈提示
+
+### Day 6
+
+- 更新 requirements.txt，加入 streamlit
+- 修复依赖版本冲突（packaging 版本与 streamlit 不兼容）
+- 修复 test_get_crypto_price_invalid 测试（加入 pytest.raises）
+- 从零验证：删除 .venv 重建，pip install，全流程跑通
+- pytest 12 个测试全部通过
+- 补充 app.py 模块级 docstring
+
+### Day 7
+
+- 更新 README：加入 Streamlit 启动说明、三个 tab 功能描述、界面截图
+- 更新项目结构：加入 src/app.py 和 docs/screenshot.png
+- 更新 CHANGELOG
+- GitHub 发布 v0.3 tag
+
 ## 2026-03-28 (Week 3 Day 5-7)
 
 - 新增 /analyze/{coin} 接口，AI 智能行情分析
