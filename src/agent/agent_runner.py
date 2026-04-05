@@ -25,8 +25,18 @@ class AgentRunner:
             if "Action" in client_response:
                 info_part = client_response.split("Action:",1)[1]
                 function_name = info_part.split("Action Input:", 1)[0].strip()
+                if function_name not in self.tool_registry.tools:
+                    conversation += f"\n{client_response}\nObservation: tools中无{function_name}工具，请检查\n"
+                    max_steps -= 1
+                    continue
                 params = client_response.split("Action Input:", 1)[1].strip()
-                params_str = json.loads(params)
+                params_first_line = params.split("\n")[0].strip()
+                try:
+                    params_str = json.loads(params_first_line)
+                except json.decoder.JSONDecodeError:
+                    conversation += f"\n{client_response}\nObservation: Action Input 格式不正确，请重新按 JSON 格式输出参数\n"
+                    max_steps -=1
+                    continue
                 res = self.tool_registry.call(function_name,**params_str)
 
                 observation = f"\nObservation: {json.dumps(res)}\n"
@@ -37,11 +47,13 @@ class AgentRunner:
                 print(final_answer)
                 return final_answer
             else:
-                raise Exception
+                #兜底
+                print(f"返回的格式无法解析，现在直接回复final answer：{client_response}")
+                break
             max_steps = max_steps - 1
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()
-    agent_runner.run("请你给我查询bitcoin的价格")
+    agent_runner.run("对比一下 BTC 和 ETH 的价格")
 
 
