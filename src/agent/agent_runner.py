@@ -4,6 +4,8 @@ from src.agent.tool_registry import ToolRegistry
 from src.tools.price import get_crypto_price
 from src.tools.market import get_market_overview,get_coin_market
 import json
+from src.agent.trace import trace_record
+import time
 
 class AgentRunner:
     def __init__(self):
@@ -18,8 +20,11 @@ class AgentRunner:
         tools_description = self.tool_registry.get_tool_descriptions()
         agent_system_prompt = SYSTEM_PROMPT.format(tool_descriptions=tools_description)
         conversation = "用户问题：" + user_question
+        final_answer = None
         max_steps = 5
-        while max_steps > 0:
+        steps = 0
+        start_time = time.time()
+        while max_steps > steps:
             client_response = llm_client(conversation,system_prompt=agent_system_prompt)
             print(client_response)
             if "Action" in client_response:
@@ -42,15 +47,30 @@ class AgentRunner:
                 observation = f"\nObservation: {json.dumps(res)}\n"
                 conversation = conversation + "\n" + client_response + observation
 
+
             elif "Final Answer" in client_response:
                 final_answer = client_response.split("Final Answer:", 1)[1].strip()
                 print(final_answer)
-                return final_answer
+                break
             else:
                 #兜底
-                print(f"返回的格式无法解析，现在直接回复final answer：{client_response}")
+                final_answer = f"返回的格式无法解析，现在直接回复final answer：{client_response}"
+                print(final_answer)
                 break
-            max_steps = max_steps - 1
+
+            steps = steps + 1
+
+        end_time= time.time()
+        record={
+            "user_question": user_question,
+            "final_answer": final_answer,
+            "full_conversation": conversation,
+            "total_steps": steps,
+            "total_time": end_time - start_time,
+        }
+        trace_record(record)
+        return final_answer
+
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()
