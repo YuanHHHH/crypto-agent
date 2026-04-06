@@ -74,6 +74,6 @@ class AgentRunner:
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()
-    agent_runner.run("对比一下 BTC 和 ETH 的价格")
+    agent_runner.run("对比一下 BTC 和 SOL 的价格")
 
 

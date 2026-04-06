@@ -11,6 +11,7 @@ from src.tools.price import get_crypto_price,load_price_history
 from src.tools.analyzer import analyze_coin
 from src.tools.llm_client import llm_client
 from src.tools.market import get_market_overview,get_coin_market
+from src.agent.agent_runner import AgentRunner
 import streamlit as st
 from src.utils.config import HISTORY_FILE
 from dotenv import load_dotenv
@@ -19,7 +20,7 @@ load_dotenv()
 
 
 st.set_page_config("Crypto Agent",layout="wide")
-
+agent = AgentRunner()
 with st.sidebar:
     st.title("Crypto Agent")
     st.write("v0.3")
@@ -39,7 +40,8 @@ with tab1:
     coin_selected = st.selectbox("选择币种", coins,index=st.session_state.coin_index)
     custom_coin = st.text_input("或手动输入币种（留空则用上面的选择）")
     coin = custom_coin.strip() if custom_coin.strip() else coin_selected
-    col1, col2 = st.columns(2)
+    agent_text = st.text_input("若要点击Agent模式，请在此输入要询问的问题")
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         if st.button("查询价格"):
@@ -80,6 +82,18 @@ with tab1:
                     st.exception(e)
             except Exception as e:
                 st.error(f"AI 分析失败: {e}")
+    with col3:
+        if st.button("Agent模式"):
+            if not agent_text.strip():
+                st.warning("请先在上方输入框输入你的问题")
+            else:
+                try:
+                    with st.spinner("Agent分析中，请稍候..."):
+                        answer = agent.run(agent_text)
+                        st.markdown(answer)
+                        st.success("Agent分析成功")
+                except Exception as e:
+                    st.error(f"AI 分析失败: {e}")
 
 with tab2:
     try:
