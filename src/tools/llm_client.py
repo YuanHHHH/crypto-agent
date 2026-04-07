@@ -1,6 +1,7 @@
 import os
 import requests
 from dotenv import load_dotenv
+from src.utils.exceptions import APIError
 
 load_dotenv()
 
@@ -37,10 +38,17 @@ def llm_client(prompt,system_prompt=None):
         "max_tokens": 1000,
         "temperature": 0.7
     }
-
-    response = requests.post(url=mm_BASE_URL, headers=headers, json=data)
-    result = response.json()
-    content = result["choices"][0]["message"]["content"]
+    try:
+        response = requests.post(url=mm_BASE_URL, headers=headers, json=data)
+        result = response.json()
+        if "choices" not in result:
+            error_msg = result.get("error", {}).get("message", "unknown error")
+            raise APIError(f"LLM API 调用失败: {error_msg}")
+        content = result["choices"][0]["message"]["content"]
+    except requests.exceptions.Timeout:
+        raise Exception("LLM API 请求超时")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"LLM API 网络错误: {e}")
 
     if "<think>" in content:
         content = content.split("</think>")[-1].strip()

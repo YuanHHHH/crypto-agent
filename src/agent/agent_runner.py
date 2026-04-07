@@ -10,6 +10,7 @@ import time
 
 class AgentRunner:
     def __init__(self):
+        self.chat_history = []
         self.tool_registry = ToolRegistry()
         self.tool_registry.register("get_price", get_crypto_price, "获得指定代币的价格数据",
                                {"symbol": "要查询的代币，如 bitcoin、ethereum"})
@@ -19,10 +20,18 @@ class AgentRunner:
         self.tool_registry.register("analyze_coin",analyze_coin,"对指定币种进行深度行情分析",
                                     {"symbol":"要查询的代币"})
 
+    def reset(self):
+        self.chat_history = []
+
     def run(self,user_question):
         tools_description = self.tool_registry.get_tool_descriptions()
         agent_system_prompt = SYSTEM_PROMPT.format(tool_descriptions=tools_description)
-        conversation = "用户问题：" + user_question
+
+        history_text = ""
+        for turn in self.chat_history:
+            history_text += f"之前的问题：{turn['user_question']}\n之前的回答：{turn['final_answer']}\n\n"
+
+        conversation = history_text + "用户问题：" + user_question
         final_answer = None
         max_steps = 5
         steps = 0
@@ -35,7 +44,7 @@ class AgentRunner:
                 function_name = info_part.split("Action Input:", 1)[0].strip()
                 if function_name not in self.tool_registry.tools:
                     conversation += f"\n{client_response}\nObservation: tools中无{function_name}工具，请检查\n"
-                    max_steps -= 1
+                    steps +=1
                     continue
                 params = client_response.split("Action Input:", 1)[1].strip()
                 params_first_line = params.split("\n")[0].strip()
@@ -43,7 +52,7 @@ class AgentRunner:
                     params_str = json.loads(params_first_line)
                 except json.decoder.JSONDecodeError:
                     conversation += f"\n{client_response}\nObservation: Action Input 格式不正确，请重新按 JSON 格式输出参数\n"
-                    max_steps -=1
+                    steps +=1
                     continue
                 res = self.tool_registry.call(function_name,**params_str)
 
@@ -72,6 +81,7 @@ class AgentRunner:
             "total_time": end_time - start_time,
         }
         trace_record(record)
+        self.chat_history.append({"user_question":user_question,"final_answer":final_answer})
         return final_answer
 
 
