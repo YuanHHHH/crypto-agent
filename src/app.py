@@ -69,8 +69,8 @@ with tab1:
         if st.button("AI 分析"):
             try:
                 with st.spinner("AI 分析中，请稍候..."):
-                    prompt = analyze_coin(coin)
-                    st.markdown(llm_client(prompt))
+                    res = analyze_coin(coin)
+                    st.markdown(res)
                     st.success(f"分析成功：{coin}")
             except InvalidCoinError as e:
                 st.error("币种不存在，请检查输入")

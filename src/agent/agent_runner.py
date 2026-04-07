@@ -3,6 +3,7 @@ from src.agent.prompts import SYSTEM_PROMPT
 from src.agent.tool_registry import ToolRegistry
 from src.tools.price import get_crypto_price
 from src.tools.market import get_market_overview,get_coin_market
+from src.tools.analyzer import analyze_coin
 import json
 from src.agent.trace import trace_record
 import time
@@ -15,6 +16,8 @@ class AgentRunner:
         self.tool_registry.register("get_market", get_market_overview, "获得整个市场的相关重要数据", {})
         self.tool_registry.register("get_coin_detail", get_coin_market, "获得指定代币的相关market数",
                                {"coin_id": "要查询的代币，如 bitcoin、ethereum"})
+        self.tool_registry.register("analyze_coin",analyze_coin,"对指定币种进行深度行情分析",
+                                    {"symbol":"要查询的代币"})
 
     def run(self,user_question):
         tools_description = self.tool_registry.get_tool_descriptions()
@@ -74,6 +77,6 @@ class AgentRunner:
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()
-    agent_runner.run("对比一下 BTC 和 SOL 的价格")
+    agent_runner.run("帮我分析一下 ETH 的行情")
 
 
