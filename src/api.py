@@ -53,8 +53,7 @@ def coin_market(coin:str):
 
 @app.get("/analyze/{coin}",response_model=Analysis)
 def analyze_endpoint(coin: str):
-    prompt = analyze_coin(coin)
-    res = llm_client(prompt)
+    res = analyze_coin(coin)
     return {
         "symbol": coin,
         "content": res
