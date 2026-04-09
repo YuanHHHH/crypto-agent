@@ -164,3 +164,431 @@ for name, info in self.tools.items():
 问题：`registry.call("get_price", {"symbol": "bitcoin"})` 把 dict 当成位置参数传入，而 call 方法期望 **kwargs。
 
 解决：用 ** 解包 dict：`registry.call("get_price", **{"symbol": "bitcoin"})` 或 `registry.call("get_price", symbol="bitcoin")`。
+
+## Week 6: Agent 深化 + 对话记忆 + 质量评估
+
+### analyze_coin 返回的分析报告被 Agent 二次抄写
+
+问题：给 Agent 加 analyze_coin 工具后，工具内部调用 LLM 生成了一份完整的行情分析报告。Agent 调用这个工具拿到报告作为 Observation，但下一轮 LLM 没有按 Thought/Final Answer 格式输出，而是直接把整份报告复制粘贴出来，parser 识别不到前缀，走了 no_parsed 兜底分支。
+
+原因：LLM 看到 Observation 里已经是一份完整答案，觉得「都给我了我直接抄一遍就行」，但忘了加 `Final Answer:` 前缀。这是嵌套 LLM 调用（subagent）设计时的典型问题。
+
+解决方案有两层：
+1. prompt 层：加一条强制规则「不管 Observation 里的内容是什么，你都必须按 Thought/Final Answer 的格式输出，不能直接复制 Observation 的内容」
+2. 代码层：parser 的 no_parsed 兜底分支只返回 raw_text，不做二次包装，agent_runner 拿到后直接展示即可
+
+```python
+# prompts.py 里加这条规则
+- 不管 Observation 里的内容是什么，你都必须按 Thought/Final Answer 的格式输出
+
+# parser.py 的兜底分支保持简洁
+else:
+    return {
+        "type": "no_parsed",
+        "thought": extract_thought(client_response),
+        "raw_text": client_response,
+    }
+```
+
+面试怎么说：嵌套 LLM 调用（工具内部调用 LLM）是 subagent 架构的基础，但外层 LLM 看到内层 LLM 的完整输出时会困惑，需要在 prompt 里明确约束输出格式。这也是为什么真正的 subagent 架构需要独立的 context 隔离，而不是把子 agent 的输出直接塞给父 agent。
+
+### LLM 幻觉出 Observation 字段
+
+问题：LLM 在输出 Action 之后，自己又模仿了一段 `Observation: {...}` 假装看到了工具结果。比如：
+
+```
+Thought: 查 BTC 价格
+Action: get_price
+Action Input: {"symbol": "bitcoin"}
+Observation: {"symbol": "bitcoin", "price": 87000}   ← 这是 LLM 幻觉的，不是真的工具结果
+```
+
+不影响功能（parser 用 `split("Action Input:", 1)[1].split("\n")[0]` 只取第一行 JSON），但干扰阅读，trace 日志里也很难看。
+
+原因：few-shot 示例里展示了「Action 后面跟 Observation」的完整流程，LLM 学了这个模式后以为自己也要输出 Observation。另一方面，LLM 的训练数据里大量包含这种 agent 对话示例，模型被「污染」了。
+
+解决：
+1. prompt 加规则「不要在你的输出里包含 Observation，Observation 由系统自动添加，你只需要输出 Thought / Action / Action Input」
+2. few-shot 示例里的 Observation 前加「（系统返回）」标注，让 LLM 区分「这是系统会给我的」和「这是我要输出的」
+
+```
+示例2:
+用户问题：对比一下 BTC 和 ETH 的价格
+Thought: ...
+Action: get_price
+Action Input: {"symbol": "bitcoin"}
+
+（系统返回）
+Observation: {"symbol": "bitcoin", "price": 87000, "change_24h": 2.3}
+
+Thought: 已经拿到 BTC 的价格...
+```
+
+面试怎么说：这是 prompt engineering 里的一个细节。few-shot 示例虽然有效，但 LLM 可能会误学示例里的所有模式，包括本来不该它输出的部分。解决方案是在示例里用标记区分「输入」和「输出」。
+
+### 多轮对话用字符串累加 chat_history 会越来越乱
+
+问题：第一版对话记忆是用字符串存储 chat_history，每次 run() 把整个 conversation（包含 Thought/Action/Observation/Final Answer）全部拼接进去。第二轮对话时，新 conversation 里包含了第一轮完整的推理过程：
+
+```
+用户问题：BTC 多少钱
+Thought: ...
+Action: get_price
+...
+Observation: ...
+Final Answer: BTC 价格 87000
+用户问题：那 ETH 呢
+Thought: ...
+Action: get_price
+...
+```
+
+到第三四轮 conversation 会变成一大坨，LLM 容易混乱，Token 消耗也快速上涨。
+
+原因：没有区分「历史对话」和「当前推理过程」两种信息。历史对话只需要「用户问了什么、Agent 最终回答了什么」，中间的 Thought/Action/Observation 是推理痕迹，不应该喂给下一轮。
+
+解决：chat_history 改成 list of dict，每个元素只存两个关键字段：
+
+```python
+# 结构
+self.chat_history = []
+
+# 更新时
+self.chat_history.append({
+    "user_question": user_question,
+    "final_answer": final_answer
+})
+
+# 使用时
+history_text = ""
+for turn in self.chat_history:
+    history_text += f"之前的问题：{turn['user_question']}\n之前的回答：{turn['final_answer']}\n\n"
+conversation = history_text + "用户问题：" + user_question
+```
+
+这样 LLM 看到的历史就是清晰的「之前问了什么 + 之前回答了什么」，不会被中间的 Thought/Action 干扰。Token 消耗也大幅下降。
+
+面试怎么说：对话记忆的核心原则是「只存结构化的关键信息，不存推理过程」。生产环境下还需要加上下文截断（只保留最近 N 轮）、摘要压缩（超长对话做 summary）等机制，应对 Lost in the Middle 问题（LLM 对上下文中间部分记忆衰减）。这些都是 Memory 模块的进阶内容。
+
+### 字段名在生产端和消费端不一致（同一个问题出现多次）
+
+问题：agent_runner 里 trace 记录的字段叫 `tool_call_count`，但 eval 里读的是 `line["total_tool_success"]`，名字完全对不上。运行时报 KeyError。同样的问题在 `end_reason` / `end_type` 字段也发生过：agent_runner 存的是 `"end_reason": end_type`，eval 里读的是 `line["end_type"]`。
+
+原因：字段名用字符串硬编码在两个地方（生产端和消费端），一边改了另一边没同步。重构时很容易漏改。
+
+解决：
+1. 生产端和消费端的字段名必须严格一致。写代码时用 IDE 全局搜索确认
+2. 读旧数据时总是用 `.get("field", 默认值)` 加兜底，这样数据结构升级时老数据不会让代码崩
+3. 统一命名风格：Python 惯例是小写下划线（snake_case），不要混用大小写和空格
+4. 大型项目可以把字段名定义成常量（比如 trace_fields.py 里定义 `TOOL_CALL_COUNT = "tool_call_count"`），生产端和消费端都 import 这个常量，IDE 会帮你做拼写检查和重构
+
+```python
+# trace_fields.py
+USER_QUESTION = "user_question"
+FINAL_ANSWER = "final_answer"
+END_REASON = "end_reason"
+TOOL_CALL_COUNT = "tool_call_count"
+PARSE_ERROR_COUNT = "parse_error_count"
+
+# agent_runner.py
+record = {
+    USER_QUESTION: user_question,
+    END_REASON: end_type,
+    TOOL_CALL_COUNT: tool_call_count,
+}
+
+# eval.py
+for line in json_list:
+    if line[END_REASON] == "final_answer":
+        ...
+```
+
+面试怎么说：这是数据 pipeline 里最常见的坑之一。生产环境里通常用 Protobuf / JSON Schema / Pydantic 模型做强类型约束，让字段名在编译期就对齐。我后面做 LangChain / LangGraph 时会用 Pydantic 定义所有中间状态，从根本上避免这类问题。这也是为什么面经里反复强调「接口契约」。
+
+### steps 计数 bug：final_answer 分支 break 前没累加
+
+问题：eval 报告显示平均步数 0.9，数据明显偏小。正常情况下调用工具的问题至少应该是 2 步（action + final_answer），不调用工具的是 1 步。10 个问题里有几个多步调用（比如对比 BTC 和 ETH 是 3 步），平均应该在 1.5-2 之间才对。
+
+原因：agent_runner 的主循环结构是：
+
+```python
+while max_steps > steps:
+    # 解析 LLM 输出
+    if response_parsed.get("type") == "action":
+        # 调用工具
+        pass
+    elif response_parsed.get("type") == "final_answer":
+        break   # ← 直接跳出，下面的 steps+=1 没执行
+    elif response_parsed.get("type") == "no_parsed":
+        break   # ← 同样的问题
+    
+    steps = steps + 1   # ← 循环末尾才累加
+```
+
+action 分支走完会执行末尾的 `steps += 1`，但 final_answer 和 no_parsed 是 break 跳出循环，跳过了累加。所以最后一步（产生 final_answer 的那一步）没被计数。
+
+举例：查 BTC 价格的流程是
+1. 第一轮：action（调用 get_price）→ steps 末尾 +1 → steps = 1
+2. 第二轮：final_answer → break → steps 还是 1
+
+实际执行了 2 步，却只记录了 1 步。
+
+解决：在 break 之前手动累加 steps：
+
+```python
+elif response_parsed.get("type") == "final_answer":
+    end_type = "final_answer"
+    final_answer = response_parsed["final_answer"]
+    steps += 1
+    break
+elif response_parsed.get("type") == "no_parsed":
+    end_type = "no_parsed"
+    steps += 1
+    break
+```
+
+修复后平均步数从 0.9 涨到 1.59，符合预期。
+
+面试怎么说：这个 bug 是通过 eval 发现的。如果没有质量评估，我根本不会知道步数计数有问题。这就是可观测性的价值：把肉眼看不见的行为变成可量化的指标。另外，这种 break + 循环末尾累加的模式本身就容易出 bug，更好的写法是把「累加」放在每个分支的明确位置，或者用 for 循环 + 显式退出条件替代 while + break。
+
+### no_parsed 兜底率持续 15%，但答案其实是对的
+
+问题：batch_test 10 个用例里有 1-2 个走了 no_parsed 兜底分支。仔细看 LLM 输出，答案内容是完全正确的：
+
+```
+Thought: 用户想知道 BTC 的价格...
+Action: get_price
+Action Input: {"symbol": "bitcoin"}
+（系统返回 Observation）
+BTC 当前价格为 $71,216，24h 跌幅 -0.97%。   ← 这一行没有 "Final Answer:" 前缀
+```
+
+LLM 拿到 Observation 后直接输出了答案文本，但**省略了 `Final Answer:` 前缀**。parser 既没匹配到 Action 也没匹配到 Final Answer，走了 no_parsed 兜底。
+
+原因：MiniMax 模型在多轮对话的第二轮（拿到 Observation 后）有时会忘记 prompt 的格式约束。特别是当 Observation 是结构化 JSON 数据时，模型倾向于直接开始分析，跳过格式化前缀。这是模型训练偏见。
+
+解决方案（当前标记为已知问题，Week 7 集中优化）：
+1. prompt 层：加更强的格式约束「每次回复都必须以 Thought: 开头，即使你已经拿到了 Observation」
+2. parser 层：智能兜底，如果 LLM 输出是有意义的长文本（比如超过 20 字），就当作 final_answer 处理而不是 no_parsed：
+
+```python
+else:
+    if len(client_response.strip()) > 20:
+        return {
+            "type": "final_answer",
+            "thought": "",
+            "final_answer": client_response.strip(),
+        }
+    else:
+        return {
+            "type": "no_parsed",
+            "raw_text": client_response,
+        }
+```
+
+3. 根本方案：切换到 Function Calling 格式的 LLM API，让工具调用走标准化的结构化接口而不是文本解析
+
+面试怎么说：这个 case 很有意思，值得单独拿出来讲。一个数据两种视角：用户体验角度答案正确用户满意，系统指标角度兜底率 15% 触发了异常分支。这说明 **Agent 质量不能只看「用户满没满意」还要看「系统行为是否符合预期」**。即使答案正确，走兜底分支对于调试、追踪、二次处理都有风险。这也是为什么要做 eval——没有可观测性就不知道系统真实状态。
+
+### `<minimax:tool_call>` 格式幻觉
+
+问题：MiniMax 模型偶尔会绕过 prompt 定义的 Action 格式，自己输出它训练时内置的工具调用格式：
+
+```
+<minimax:tool_call>
+<invoke name="get_coin_detail">
+<parameter name="coin_id">ethereum</parameter>
+</invoke>
+</minimax:tool_call>
+```
+
+parser 识别不出这种格式，走 no_parsed 分支。
+
+原因：MiniMax 被微调过内置的 tool_call 格式（类似 OpenAI 的 Function Calling），这个格式深入了模型的训练数据。即使 prompt 要求输出 Thought/Action 格式，模型在某些触发条件下会回退到它熟悉的格式。
+
+解决：
+1. 短期：依赖 no_parsed 兜底分支处理，不让 Agent 崩溃
+2. 中期：在 prompt 里明确禁止「不要使用 XML 标签或 tool_call 格式，只能输出 Thought/Action/Action Input 文本」
+3. 长期：切换到 Function Calling API（让 MiniMax 走它原生的工具调用路径），或者换一个 prompt 可控性更强的模型（Claude、GPT-4）
+
+面试怎么说：不同模型的训练偏见会影响 prompt 的有效性。生产 Agent 选型时要考虑模型对自定义格式的遵从度。这也是为什么 LangChain 抽象出了「Agent Type」的概念，不同模型用不同的 parser 和 prompt 模板。
+
+### Streamlit st.expander 参数类型错误
+
+问题：尝试用 `st.expander(step_log)` 展示 Agent 推理过程，报错：
+
+```
+AI 分析失败: bad argument type for built-in operation
+```
+
+原因：st.expander 的参数是**标题字符串**，不是内容。传了一个 list 进去，Streamlit 试图把 list 转成字符串作为标题，触发类型错误。
+
+解决：用 with 代码块，expander 里面再写具体内容：
+
+```python
+for step_info in step_log:
+    step_num = step_info.get("step", "?")
+    step_type = step_info.get("type", "")
+    with st.expander(f"步骤 {step_num}：{step_type}"):
+        if step_info.get("thought"):
+            st.markdown(f"**Thought:** {step_info['thought']}")
+        if step_type == "action":
+            st.markdown(f"**Action:** `{step_info['action']}`")
+            st.markdown(f"**Action Input:** `{step_info['action_input']}`")
+            st.markdown(f"**Observation:** {step_info.get('observation', '')}")
+        elif step_type == "final_answer":
+            st.markdown(f"**Final Answer:** {step_info['final_answer']}")
+```
+
+面试怎么说：Streamlit 的 API 习惯是「标题放参数，内容放 with 代码块里」。这和 html 的思路一致：标签名和属性是一回事，内容是另一回事。
+
+### Streamlit 在命令行脚本里跑出现 ScriptRunContext 警告
+
+问题：用 `python -m scripts.batch_test` 直接跑批量测试时，输出里一直有大量警告：
+
+```
+Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+```
+
+原因：batch_test 间接导入了 market.py，market.py 顶部有 `@st.cache_data(ttl=60)` 装饰器。Streamlit 的缓存装饰器只能在 `streamlit run` 环境下正常工作，在普通 Python 脚本里执行时会抛警告（但不影响功能）。
+
+解决：
+1. 短期：警告不影响功能可以忽略
+2. 根本解决：把 Streamlit 相关代码和业务代码分离。业务层（tools/）不应该依赖 UI 层（streamlit），`@st.cache_data` 应该在 app.py 里单独包装一层：
+
+```python
+# tools/market.py 保持纯业务函数
+def get_market_overview() -> dict:
+    # 不带 @st.cache_data
+    ...
+
+# app.py 里再包一层缓存
+@st.cache_data(ttl=60)
+def cached_get_market_overview():
+    return get_market_overview()
+```
+
+这样 tools 模块可以被 API、Agent、测试脚本自由导入，不再依赖 Streamlit。
+
+面试怎么说：这是依赖边界不清的典型问题。业务层不应该依赖 UI 层，否则复用时到处漏。Week 7 重构时我会按这个原则重新组织代码。这就是「关注点分离」原则——每一层只关心自己的事，不污染下层。
+
+### MiniMax API 520 错误频繁出现
+
+问题：开发过程中 MiniMax API 偶尔返回 520 错误（Cloudflare 网关错误），特别是多步工具调用时。错误信息：
+
+```
+src.utils.exceptions.APIError: LLM API 调用失败: unknown error, 520 (1000)
+```
+
+一开始是整个 Agent 崩溃报 KeyError: 'choices'，因为 llm_client 直接访问 `result["choices"][0]["message"]["content"]`，没有检查返回结构。
+
+原因：
+1. MiniMax 后端服务临时抖动（最常见，几秒到几分钟内自己恢复）
+2. 请求 payload 可能触发某些边界情况（特殊字符、prompt 触发安全审查等）
+3. 多步工具调用时 conversation 较长，可能触发模型处理异常
+
+解决：分三层防御
+1. llm_client 层：检查返回结构，遇到错误 raise 明确异常
+```python
+if "choices" not in result:
+    error_msg = result.get("error", {}).get("message", "unknown error")
+    raise APIError(f"LLM API 调用失败: {error_msg}")
+```
+2. agent_runner 层：捕获 APIError，返回友好提示不崩溃
+```python
+try:
+    client_response = llm_client(conversation, system_prompt=...)
+except APIError as e:
+    final_answer = f"LLM 服务暂时不可用: {e}"
+    break
+```
+3. 用户层：给用户友好的错误信息，trace 里记录完整错误
+
+面试怎么说：生产级 LLM 应用必须做好容错。至少三件事要做：
+- 自动重试：短时抖动用 retry 装饰器处理
+- 熔断机制：持续失败时切换备用模型（比如 MiniMax → 通义千问 → 豆包）
+- 降级方案：LLM 完全不可用时返回预设的兜底回复，保证用户体验
+
+这也是为什么面经里「Agent 稳定性」是重点考察方向。我的 retry 装饰器只处理了 CoinGecko API，Week 9-10 工程化阶段会给 llm_client 也加上 retry + 熔断。
+
+### httpx 漏装导致 pytest 全部失败
+
+问题：跑 `pytest tests/ -v` 时，tests/test_api.py 无法 collect：
+
+```
+ERROR collecting tests/test_api.py
+ModuleNotFoundError: No module named 'httpx'
+RuntimeError: The starlette.testclient module requires the httpx package
+```
+
+原因：FastAPI 的 TestClient 依赖 httpx，但我的 requirements.txt 漏了这个包。之前开发环境用 `pip install httpx` 单独装过，但没同步到 requirements.txt。新克隆仓库或重建 .venv 时就会出错。
+
+解决：
+1. `pip install httpx` 补装
+2. 更新 requirements.txt 加上 httpx
+3. 验证：删除 .venv 重建，`pip install -r requirements.txt` 能一次性装齐所有依赖
+
+面试怎么说：每次 pip install 新包都要同步到 requirements.txt。更规范的做法是用 poetry / uv / pipenv 这种工具，装包的同时自动更新依赖配置文件。这也是为什么现代 Python 项目推荐用 pyproject.toml 替代 requirements.txt。Week 12 重构时我会考虑迁移到 uv（更快，且依赖管理更可靠）。
+
+### parser 里的 thought 提取会把后面的内容全部带进来
+
+问题：第一版 extract_thought 写成 `client_response.split("Thought:", 1)[1].strip()`，结果 thought 里包含了后面的 Action、Action Input、Final Answer 全部内容。
+
+原因：split 只是按关键字切分，取 [1] 拿到的是「Thought:」之后的所有文本，没有设定结束边界。
+
+解决：加一个辅助函数，遇到下一个关键字时截断：
+
+```python
+def extract_thought(text):
+    if "Thought:" not in text:
+        return ""
+    after_thought = text.split("Thought:", 1)[1]
+    for stop_word in ["Action:", "Final Answer:"]:
+        if stop_word in after_thought:
+            after_thought = after_thought.split(stop_word)[0]
+    return after_thought.strip()
+```
+
+另外 no_parsed 情况下 LLM 可能完全没有 Thought 关键字，`split("Thought:", 1)[1]` 会报 IndexError。上面的实现用了 `if "Thought:" not in text` 提前判断，返回空串。
+
+面试怎么说：文本解析要考虑边界情况。「某个关键字不存在」「某个关键字出现多次」「关键字之间的文本可能包含特殊字符」都是常见陷阱。生产级解析应该用正则或状态机替代 split 的暴力切分。
+
+### agent_runner 里定义了 step_log 但没使用
+
+问题：Day 2 写 agent_runner 时定义了 `step_log = []`，但后面主循环里完全没有使用这个变量。定义了却不用会让代码迷惑读者。
+
+原因：规划 Day 5 可视化时提前埋了变量，但当时还没实现。
+
+解决：要么删掉（等 Day 5 再加），要么立刻实现（完成每一步的推理记录）。最终在 Day 5 真正用上了它。
+
+面试怎么说：写代码的原则之一是「不要提前引入未使用的抽象」（YAGNI，You Ain't Gonna Need It）。当时埋下这个变量不算错，但应该加注释说明「Day 5 会用到」，或者干脆等要用时再加。
+
+### step_log 里步骤编号跳号（0, 2 没有 1）
+
+问题：Streamlit 展示的推理过程里，步骤编号不连续，从 0 直接跳到 2。
+
+原因：各个分支 append step_log 时用的是当前 `steps` 值，但不同分支累加 steps 的时机不一样。action 分支在 append 之后才累加，final_answer 分支在 append 之前就累加了，导致编号错乱。
+
+解决：不用 steps 变量做编号，直接用 `len(step_log) + 1`：
+
+```python
+step_log.append({
+    "step": len(step_log) + 1,
+    "type": response_parsed.get("type"),
+    ...
+})
+```
+
+这样每次 append 时编号严格按 list 长度递增，和 steps 变量解耦。
+
+面试怎么说：两个变量做同一件事（记录顺序）就会出现不一致。原则是「一个数据只由一个源头维护」，显示编号用 list 长度，循环控制用 steps 变量，各司其职。
+
+### tests 模块 import 顺序问题
+
+问题：pytest 运行时偶尔会因为导入顺序不对崩溃。某些模块在导入时会触发 Streamlit 缓存装饰器初始化，在非 streamlit run 环境下抛警告。
+
+原因：测试环境没有 Streamlit runtime，但被测代码（如 market.py）顶部有 `@st.cache_data`。
+
+解决：暂时忽略警告，根本方案是把 Streamlit 缓存移出业务代码（参见「ScriptRunContext 警告」那条）。
+
+面试怎么说：测试和生产环境的差异会暴露出代码里的隐式依赖。好的测试应该只依赖被测对象，不依赖外部运行时。
