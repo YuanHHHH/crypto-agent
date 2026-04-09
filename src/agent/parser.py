@@ -1,6 +1,11 @@
 import json
 
 def extract_thought(text):
+    """
+    提取llm返回的thought
+    :param text:
+    :return: 返回从完整回答中提取出的thought
+    """
     if "Thought:" not in text:
         return ""
     after_thought = text.split("Thought:", 1)[1]
@@ -10,6 +15,11 @@ def extract_thought(text):
     return after_thought.strip()
 
 def parse_llm_output(client_response):
+    """
+    解析llm的输出，格式化的返回给agent循环，解耦功能
+    :param client_response:
+    :return: 返回格式化的llm回答
+    """
     thought = extract_thought(client_response)
     if "Action" in client_response:
         info_part = client_response.split("Action:", 1)[1]

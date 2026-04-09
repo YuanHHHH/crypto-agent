@@ -1,5 +1,7 @@
 import json
-"""
+
+def evaluate(file_path):
+    """
 统计以下指标：
 
 总运行次数
@@ -8,8 +10,9 @@ import json
 平均耗时
 工具调用成功率（调用了工具且没有报错的比例）
 兜底率（走了 else 分支的比例）
-"""
-def evaluate(file_path):
+    :param file_path:
+    :return: 返回评估数据
+    """
     with open(file_path) as f:
         json_list = [json.loads(line) for line in f if line.strip()]
         total_count = len(json_list)

@@ -22,10 +22,19 @@ class AgentRunner:
                                     {"symbol":"要查询的代币"})
 
     def reset(self):
+        """
+        重制历史对话
+        :return:
+        """
         self.chat_history = []
 
 
     def run(self,user_question):
+        """
+        执行用户输入到llm输出再到调用工具循环
+        :param user_question:
+        :return:
+        """
         tools_description = self.tool_registry.get_tool_descriptions()
         agent_system_prompt = SYSTEM_PROMPT.format(tool_descriptions=tools_description)
 
@@ -113,6 +122,20 @@ class AgentRunner:
                     }
                 )
                 continue
+            else:
+                # 兜底：如果是有意义的长文本，视为 final_answer
+                if len(client_response.strip()) > 20:
+                    return {
+                        "type": "final_answer",
+                        "thought": "",
+                        "final_answer": client_response.strip(),
+                    }
+                else:
+                    return {
+                        "type": "no_parsed",
+                        "thought": "",
+                        "raw_text": client_response,
+                    }
 
             steps = steps + 1
 
@@ -129,7 +152,7 @@ class AgentRunner:
         }
         trace_record(record)
         self.chat_history.append({"user_question":user_question,"final_answer":final_answer})
-        return (final_answer,step_log)
+        return final_answer,step_log
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()
