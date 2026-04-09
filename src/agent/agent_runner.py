@@ -57,6 +57,16 @@ class AgentRunner:
                 observation = f"\nObservation: {json.dumps(res)}\n"
                 tool_call_count += 1
                 conversation = conversation + "\n" + client_response + observation
+                step_log.append(
+                    {
+                        "step": len(step_log) + 1,
+                        "type":response_parsed.get("type"),
+                        "thought":response_parsed.get("thought", ""),
+                        "action":function_name,
+                        "action_input":response_parsed["action_input"],
+                        "observation":observation,
+                    }
+                )
 
 
             elif response_parsed.get("type") =="final_answer":
@@ -64,6 +74,14 @@ class AgentRunner:
                 final_answer = response_parsed["final_answer"]
                 print(final_answer)
                 steps += 1
+                step_log.append(
+                    {
+                        "step": len(step_log) + 1,
+                        "type":response_parsed.get("type"),
+                        "thought":response_parsed.get("thought", ""),
+                        "final_answer":final_answer,
+                    }
+                )
                 break
             elif response_parsed.get("type") =="no_parsed":
                 #兜底
@@ -71,6 +89,14 @@ class AgentRunner:
                 raw_text = f"返回的格式无法解析，现在直接回复raw_text：{response_parsed['raw_text']}"
                 print(raw_text)
                 steps += 1
+                step_log.append(
+                    {
+                        "step": len(step_log) + 1,
+                        "type":response_parsed.get("type"),
+                        "thought":response_parsed.get("thought", ""),
+                        "raw_text":raw_text,
+                    }
+                )
                 break
             elif response_parsed.get("type") =="error":
                 end_type = "error"
@@ -78,6 +104,14 @@ class AgentRunner:
                 error_notice = response_parsed["error_notice"]
                 conversation = f"{conversation}\n{client_response}\nObservation: {error_notice}，请重新按格式输出\n"
                 steps +=1
+                step_log.append(
+                    {
+                        "step": len(step_log) + 1,
+                        "type":response_parsed.get("type"),
+                        "thought":response_parsed.get("thought", ""),
+                        "observation":error_notice,
+                    }
+                )
                 continue
 
             steps = steps + 1
@@ -95,7 +129,7 @@ class AgentRunner:
         }
         trace_record(record)
         self.chat_history.append({"user_question":user_question,"final_answer":final_answer})
-        return final_answer
+        return (final_answer,step_log)
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()

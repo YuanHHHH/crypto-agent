@@ -87,7 +87,26 @@ with tab1:
             else:
                 try:
                     with st.spinner("Agent分析中，请稍候..."):
-                        answer = agent.run(agent_text)
+                        answer,step_log = agent.run(agent_text)
+                        for step_info in step_log:
+                            step_num = step_info.get("step","?")
+                            step_type = step_info.get("type","?")
+                            with st.expander(f"步骤{step_num}：{step_type}"):
+                                if step_info.get("thought"):
+                                    st.markdown(f"**💭 Thought:** {step_info['thought']}")
+                                if step_type == "action":
+                                    st.markdown(f"**🔧 Action:** `{step_info['action']}`")
+                                    st.markdown(f"**📥 Action Input:** `{step_info['action_input']}`")
+                                    st.markdown(f"**📤 Observation:** {step_info.get('observation', '')}")
+                                elif step_type == "final_answer":
+                                    st.markdown(f"**✅ Final Answer:** {step_info['final_answer']}")
+                                elif step_type == "no_parsed":
+                                    st.markdown(f"**⚠️ Raw Text:** {step_info.get('raw_text', '')}")
+                                elif step_type == "error":
+                                    st.markdown(f"**❌ Error:** {step_info.get('observation', '')}")
+
+                        st.markdown("---")
+                        st.markdown("### 最终答案")
                         st.markdown(answer)
                         st.success("Agent分析成功")
                 except Exception as e:

@@ -9,4 +9,4 @@ while True:
     if user_input == "reset":
         agent_runner.reset()
         continue
-    agent_runner.run(user_input)
+    final_answer, step_log = agent_runner.run(user_input)

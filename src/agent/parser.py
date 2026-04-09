@@ -1,7 +1,16 @@
 import json
 
+def extract_thought(text):
+    if "Thought:" not in text:
+        return ""
+    after_thought = text.split("Thought:", 1)[1]
+    for stop_word in ["Action:", "Final Answer:"]:
+        if stop_word in after_thought:
+            after_thought = after_thought.split(stop_word)[0]
+    return after_thought.strip()
 
 def parse_llm_output(client_response):
+    thought = extract_thought(client_response)
     if "Action" in client_response:
         info_part = client_response.split("Action:", 1)[1]
         function_name = info_part.split("Action Input:", 1)[0].strip()
@@ -11,6 +20,7 @@ def parse_llm_output(client_response):
             params_str = json.loads(params_first_line)
             response_parsed = {
                 "type": "action",
+                "thought": thought,
                 "function_name": function_name,
                 "action_input": params_str,
             }
@@ -19,6 +29,7 @@ def parse_llm_output(client_response):
             error_notice = f"Action Input 格式不正确，不是合法JSON"
             response_parsed = {
                 "type": "error",
+                "thought": thought,
                 "error_notice": error_notice,
             }
             return response_parsed
@@ -27,6 +38,7 @@ def parse_llm_output(client_response):
         final_answer = client_response.split("Final Answer:", 1)[1].strip()
         response_parsed = {
             "type": "final_answer",
+            "thought": thought,
             "final_answer": final_answer,
         }
         return response_parsed
@@ -36,6 +48,7 @@ def parse_llm_output(client_response):
         raw_text = client_response
         response_parsed = {
             "type": "no_parsed",
+            "thought": thought,
             "raw_text": raw_text,
         }
         return response_parsed
