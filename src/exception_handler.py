@@ -1,7 +1,7 @@
 from fastapi import Request, FastAPI
 from fastapi.responses import JSONResponse
 
-from src.utils.exceptions import CryptoAgentError,APIError,InvalidCoinError
+from src.utils.exceptions import APIError,InvalidCoinError
 
 def register_exception_handlers(app: FastAPI):
     @app.exception_handler(APIError)

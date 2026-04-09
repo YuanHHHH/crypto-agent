@@ -39,12 +39,14 @@ Thought: 用户想对比两个币种，我需要分别查询。先查 BTC。
 Action: get_price
 Action Input: {{"symbol": "bitcoin"}}
 
+（系统返回）
 Observation: {{"symbol": "bitcoin", "price": 87000, "change_24h": 2.3}}
 
 Thought: 已经拿到 BTC 的价格，现在需要查 ETH 的价格。
 Action: get_price
 Action Input: {{"symbol": "ethereum"}}
 
+（系统返回）
 Observation: {{"symbol": "ethereum", "price": 3200, "change_24h": 1.5}}
 
 Thought: 两个币种的数据都拿到了，可以对比回答了。

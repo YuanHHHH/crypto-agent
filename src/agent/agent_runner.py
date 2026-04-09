@@ -35,6 +35,8 @@ class AgentRunner:
 
         conversation = history_text + "用户问题：" + user_question
         final_answer = None
+        step_log = []
+
         max_steps = 5
         steps = 0
         start_time = time.time()
@@ -61,12 +63,14 @@ class AgentRunner:
                 end_type = "final_answer"
                 final_answer = response_parsed["final_answer"]
                 print(final_answer)
+                steps += 1
                 break
             elif response_parsed.get("type") =="no_parsed":
                 #兜底
                 end_type = "no_parsed"
                 raw_text = f"返回的格式无法解析，现在直接回复raw_text：{response_parsed['raw_text']}"
                 print(raw_text)
+                steps += 1
                 break
             elif response_parsed.get("type") =="error":
                 end_type = "error"
@@ -92,69 +96,6 @@ class AgentRunner:
         trace_record(record)
         self.chat_history.append({"user_question":user_question,"final_answer":final_answer})
         return final_answer
-
-
-    # def run(self,user_question):
-    #     tools_description = self.tool_registry.get_tool_descriptions()
-    #     agent_system_prompt = SYSTEM_PROMPT.format(tool_descriptions=tools_description)
-    #
-    #     history_text = ""
-    #     for turn in self.chat_history:
-    #         history_text += f"之前的问题：{turn['user_question']}\n之前的回答：{turn['final_answer']}\n\n"
-    #
-    #     conversation = history_text + "用户问题：" + user_question
-    #     final_answer = None
-    #     max_steps = 5
-    #     steps = 0
-    #     start_time = time.time()
-    #     while max_steps > steps:
-    #         client_response = llm_client(conversation,system_prompt=agent_system_prompt)
-    #         print(client_response)
-    #         if "Action" in client_response:
-    #             info_part = client_response.split("Action:",1)[1]
-    #             function_name = info_part.split("Action Input:", 1)[0].strip()
-    #             if function_name not in self.tool_registry.tools:
-    #                 conversation += f"\n{client_response}\nObservation: tools中无{function_name}工具，请检查\n"
-    #                 steps +=1
-    #                 continue
-    #             params = client_response.split("Action Input:", 1)[1].strip()
-    #             params_first_line = params.split("\n")[0].strip()
-    #             try:
-    #                 params_str = json.loads(params_first_line)
-    #             except json.decoder.JSONDecodeError:
-    #                 conversation += f"\n{client_response}\nObservation: Action Input 格式不正确，请重新按 JSON 格式输出参数\n"
-    #                 steps +=1
-    #                 continue
-    #             res = self.tool_registry.call(function_name,**params_str)
-    #
-    #             observation = f"\nObservation: {json.dumps(res)}\n"
-    #             conversation = conversation + "\n" + client_response + observation
-    #
-    #
-    #         elif "Final Answer" in client_response:
-    #             final_answer = client_response.split("Final Answer:", 1)[1].strip()
-    #             print(final_answer)
-    #             break
-    #         else:
-    #             #兜底
-    #             final_answer = f"返回的格式无法解析，现在直接回复final answer：{client_response}"
-    #             print(final_answer)
-    #             break
-    #
-    #         steps = steps + 1
-    #
-    #     end_time= time.time()
-    #     record={
-    #         "user_question": user_question,
-    #         "final_answer": final_answer,
-    #         "full_conversation": conversation,
-    #         "total_steps": steps,
-    #         "total_time": end_time - start_time,
-    #     }
-    #     trace_record(record)
-    #     self.chat_history.append({"user_question":user_question,"final_answer":final_answer})
-    #     return final_answer
-
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()
