@@ -10,6 +10,7 @@ from src.tools.price import get_crypto_price,load_price_history
 from src.tools.analyzer import analyze_coin
 from src.tools.market import get_market_overview,get_coin_market
 from src.agent.agent_runner import AgentRunner
+from src.agent.langchain_agent import langchain_agent_run
 import streamlit as st
 from src.utils.config import HISTORY_FILE
 from dotenv import load_dotenv
@@ -39,7 +40,7 @@ with tab1:
     custom_coin = st.text_input("或手动输入币种（留空则用上面的选择）")
     coin = custom_coin.strip() if custom_coin.strip() else coin_selected
     agent_text = st.text_input("若要点击Agent模式，请在此输入要询问的问题")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(3)
 
     with col1:
         if st.button("查询价格"):
@@ -81,7 +82,7 @@ with tab1:
             except Exception as e:
                 st.error(f"AI 分析失败: {e}")
     with col3:
-        if st.button("Agent模式"):
+        if st.button("Agent模式:手写版"):
             if not agent_text.strip():
                 st.warning("请先在上方输入框输入你的问题")
             else:
@@ -111,6 +112,38 @@ with tab1:
                         st.success("Agent分析成功")
                 except Exception as e:
                     st.error(f"AI 分析失败: {e}")
+    with col4:
+        if st.button("Agent模式:langchain版"):
+            if not agent_text.strip():
+                st.warning("请先在上方输入框输入你的问题")
+            else:
+                try:
+                    with st.spinner("Agent分析中，请稍候..."):
+                        answer,step_log = agent.run(agent_text)
+                        for step_info in step_log:
+                            step_num = step_info.get("step","?")
+                            step_type = step_info.get("type","?")
+                            with st.expander(f"步骤{step_num}：{step_type}"):
+                                if step_info.get("thought"):
+                                    st.markdown(f"**💭 Thought:** {step_info['thought']}")
+                                if step_type == "action":
+                                    st.markdown(f"**🔧 Action:** `{step_info['action']}`")
+                                    st.markdown(f"**📥 Action Input:** `{step_info['action_input']}`")
+                                    st.markdown(f"**📤 Observation:** {step_info.get('observation', '')}")
+                                elif step_type == "final_answer":
+                                    st.markdown(f"**✅ Final Answer:** {step_info['final_answer']}")
+                                elif step_type == "no_parsed":
+                                    st.markdown(f"**⚠️ Raw Text:** {step_info.get('raw_text', '')}")
+                                elif step_type == "error":
+                                    st.markdown(f"**❌ Error:** {step_info.get('observation', '')}")
+
+                        st.markdown("---")
+                        st.markdown("### 最终答案")
+                        st.markdown(answer)
+                        st.success("Agent分析成功")
+                except Exception as e:
+                    st.error(f"AI 分析失败: {e}")
+
 
 with tab2:
     try:

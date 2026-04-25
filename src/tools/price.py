@@ -28,11 +28,15 @@ def get_crypto_price(symbol: str) -> dict:
         "x-cg-demo-api-key": api_key,
     }
     coin_price = requests.get(url, params=params, headers=headers)
+    print(f"[DEBUG] status={coin_price.status_code}")
+    print(f"[DEBUG] headers={dict(coin_price.headers)}")
+    print(f"[DEBUG] body={coin_price.text[:500]}")
 
     if coin_price.status_code != 200:
         raise APIError(coin_price.status_code)
 
     data = coin_price.json()
+    print(f"[DEBUG] symbol={symbol}, data={data}")  # ← 加这一行
 
     if symbol not in data:
         raise InvalidCoinError(symbol)

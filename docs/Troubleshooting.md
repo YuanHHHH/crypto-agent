@@ -592,3 +592,71 @@ step_log.append({
 解决：暂时忽略警告，根本方案是把 Streamlit 缓存移出业务代码（参见「ScriptRunContext 警告」那条）。
 
 面试怎么说：测试和生产环境的差异会暴露出代码里的隐式依赖。好的测试应该只依赖被测对象，不依赖外部运行时。
+
+# TROUBLESHOOTING - Week 7 新增条目
+
+## 15. LLM 输出参数污染导致工具调用失败
+
+现象：LangChain ReAct Agent 调用 get_price 时，底层 CoinGecko API 返回空 body {}，报 InvalidCoinError。但用 curl 单独测试 CoinGecko 完全正常。
+
+根因：MiniMax 在同一次输出里混用了 ReAct 协议和自己的 [TOOL_CALL] 格式。LangChain 的 ReActOutputParser 把 Action Input 后面所有内容（包括 [TOOL_CALL] 块）都当成参数值，导致 symbol 被污染为 "bitcoin\n[TOOL_CALL]..." 这种脏字符串。CoinGecko 收到脏 ids 返回空对象。
+
+排查关键：在 retry 装饰器里 print args 才看到真实参数值。普通 print(symbol) 因为换行符让污染内容显示在下一行，看起来像独立日志。
+
+解决：在 Tool wrapper 里加 _sanitize 函数，只取第一行第一段作为真实参数。同时处理 JSON 对象字符串（{"symbol": "bitcoin"} -> bitcoin）。
+
+## 16. CoinGecko 静默限流（200 + 空 body）
+
+现象：CoinGecko API 返回 HTTP 200 但 body 是空对象 {}。代码只检查了 status_code != 200，没检查 body 结构，直接进入 symbol not in data 判断抛 InvalidCoinError。
+
+根因：CoinGecko demo key 超额或被限流时，不返回 429，而是返回 200 + 空对象。这是 CoinGecko 对 demo tier 的一种静默限流策略。
+
+解决：临时注释掉 API key 的 headers（裸访问也能用，额度更低但 Day 4 测试够了）。长期方案是在 price.py 里加空 body 检查。
+
+教训：不能只信 HTTP 状态码。API 提供商可能在应用层做限流但不改状态码。
+
+## 17. LangChain 版本选择（0.3 vs 1.0）
+
+情况：LangChain 1.0 在 2025 年 10 月发布，推荐用 create_agent 替代 create_react_agent。但 Python 3.9 环境用 pip 装不了 langchain>=1.0。
+
+决策：继续用 0.3.28。理由：0.3 教程更多、概念学习和 1.0 一致、1.0 API 还在变动（1.1 又挪了 create_agent 位置）。计划在 Week 9 用 Python 3.11 环境升级到 1.x + LangGraph。
+
+面试话术：「我项目里用的是 0.3，我了解 1.0 的 create_agent 基于 LangGraph runtime，支持 middleware 和 durable execution。两者概念一致，1.0 更面向生产。」
+
+## 18. react-chat prompt 缺少 chat_history 占位符
+
+现象：用 hub.pull("hwchase17/react") 作为 prompt，配合 ConversationBufferMemory(memory_key="chat_history")，多轮对话时 Agent 不记得之前的对话。
+
+根因：hwchase17/react 这个 prompt 的 input_variables 里没有 chat_history 占位符。Memory 存了历史但没有地方注入到 prompt 里。
+
+解决：换成 hwchase17/react-chat（有 chat_history 占位符），或自定义 PromptTemplate 显式包含 {chat_history}。
+
+教训：Memory 的生效需要两端对接：memory_key 命名要和 prompt 占位符名字一致。光传 memory 参数不够，prompt 里必须有对应的变量。
+
+## 19. ReAct parser 严格性导致 LangChain 版成功率为 0
+
+现象：三轮测试中工具调用全部成功（CoinGecko 返回了真实数据），但 Agent 最终输出全是 "Agent stopped due to iteration limit"。
+
+根因：MiniMax 拿到工具结果后直接输出答案文本，不写 Thought: 和 Final Answer: 前缀。LangChain 的 ReActOutputParser 要求精确格式，缺少这些前缀就报 Invalid Format，handle_parsing_errors 让 LLM 重试也无效，循环耗尽 max_iterations。
+
+对比：手写版 parser 有「长文本兜底」策略（>20 字符直接当 final_answer），所以成功率 84.4%。
+
+教训：框架的严格 parser 在弱模型上反而降低成功率。「弱模型 + 精准场景」下，手写的宽松兜底可能比标准框架更有效。
+
+## 20. LangChain Callback on_tool_start 不触发
+
+现象：在 TraceCallback 里重写了 on_tool_start，但工具被调用时 on_tool_start 的 print 从未出现在输出里。tool_call_count 永远是 0。
+
+根因：LangChain 0.3 里 @tool 装饰器生成的 StructuredTool 的调用走的是 Runnable chain 路径（触发 on_chain_start/end），而不是 Tool 路径（on_tool_start/end）。
+
+解决：改用 on_agent_action（Agent 决定调用工具时触发）来统计 tool_call_count。
+
+教训：Callback 的观察粒度取决于框架暴露了哪些 hook，以及具体组件走了哪条执行路径。不能想当然地假设 hook 名字对应的事件一定会触发。
+
+## 21. on_chain_start/end 被子链多次触发
+
+现象：预期 on_chain_start 在每次 invoke 时只触发一次，实际触发多次（AgentExecutor 自己一次、内部 LLM 调用一次、工具调用包装链一次）。导致状态被反复重置。
+
+解决：用 parent_run_id is None 判断是否是顶层 AgentExecutor 的事件。顶层 chain 的 parent_run_id 是 None，子链的 parent_run_id 指向父链的 run_id。
+
+注意：parent_run_id 和 run_id 不一样。run_id 是本次调用的唯一 ID（永远不为 None），parent_run_id 是父调用的 ID（顶层为 None）。

@@ -1,3 +1,4 @@
+from src.agent.langchain_callbacks import TraceCallback
 from src.agent.langchain_tools import get_coin_detail,analyze_coin,get_price,get_market
 from langchain.agents import create_react_agent, AgentExecutor
 from langchain_openai import *
@@ -95,6 +96,8 @@ prompt = PromptTemplate(
 
 print("Prompt 变量:", prompt.input_variables)
 
+callback_handler = TraceCallback()
+
 llm_model = ChatOpenAI(
     model="MiniMax-M2.7",
     base_url=base_url,
@@ -116,6 +119,7 @@ executor = AgentExecutor(
     max_iterations=5,
     handle_parsing_errors=True,
     memory=memory,
+    callbacks=[callback_handler],
 )
 
 result1 = executor.invoke({"input": "请你给我查 BTC 价格"})

@@ -205,3 +205,27 @@
 - 交互式命令行菜单
 - pytest 单元测试
 - Git 仓库搭建
+
+## v0.6 - 2026-04-19
+ 
+### Added
+- LangChain 0.3 版本的 ReAct Agent 实现（`src/agent/langchain_agent.py`）
+- @tool 装饰器包装的工具模块（`src/agent/langchain_tools.py`）
+- TraceCallback 实现可观测性（`src/agent/langchain_callbacks.py`）
+- `_sanitize` 函数处理 LLM 参数污染（JSON 对象、tool_call 块、代码块围栏）
+- ConversationBufferMemory 集成多轮对话
+- 自定义中文 ReAct PromptTemplate
+- 手写版 vs LangChain 版对比文档（`docs/custom_vs_langchain.md`）
+- Week 7 学习笔记（`docs/week7_notes.md`）
+- TROUBLESHOOTING 7 条新条目：LLM 参数污染、CoinGecko 静默限流、LangChain 版本选择、react-chat prompt chat_history 缺失、ReAct parser 严格性、on_tool_start 不触发、parent_run_id 过滤
+### Changed
+- LangChain 工具描述改用 docstring（遵循 @tool 装饰器约定）
+### Known Issues
+- LangChain 版在 MiniMax 上成功率为 0（ReAct parser 严格性问题），手写版依然推荐
+- TraceCallback 的 tool_call_count 统计不精确（on_tool_start 不触发，用 on_agent_action 近似）
+- Streamlit 集成（app.py col4 的 LangChain 按钮）延后到 Week 9
+### Dependencies
+- langchain==0.3.28
+- langchain-core==0.3.84
+- langchain-openai==0.3.35
+- langchain-community==0.3.31

@@ -240,3 +240,39 @@ trace_record 写入 trace_record.jsonl
 - Docker 容器化部署
 - MCP 协议集成
 - 多 Agent 协作 / Subagent 架构
+
+## Week 7: LangChain 重构
+ 
+本周用 LangChain 0.3.28 重构了手写的 ReAct Agent，对比两种实现在同一个模型（MiniMax-M2.7）、同一套工具、同一个任务上的表现。
+ 
+### 实现
+ 
+使用 LangChain 的 `create_react_agent` + `AgentExecutor` 替代 Week 5-6 的手写 while 循环：
+ 
+- Prompt：自定义中文 PromptTemplate，保留了手写版的 MiniMax 适配规则（禁止 tool_call 块、禁止代码块围栏、Action Input 纯文本约束）
+- 工具：用 `@tool` 装饰器包装原有 4 个函数，加 `_sanitize` 防 LLM 参数污染
+- 记忆：`ConversationBufferMemory` 集成多轮对话，通过 `chat_history` 占位符和 prompt 对接
+- 观测：自定义 `TraceCallback`（继承 `BaseCallbackHandler`）实现 trace 记录，字段结构与手写版一致，可共用 `eval.py`
+### 测试对比
+ 
+在 MiniMax-M2.7 上实测三轮对话：
+ 
+- 手写版（Week 6 eval）：成功率 84.4%，平均步数 1.59，兜底率 15.6%
+- LangChain 版：工具调用全部成功，但最终答案全部被 ReActOutputParser 判定为 iteration_limit
+根因：MiniMax 拿到工具结果后不写 `Final Answer:` 前缀，LangChain 的严格 parser 识别失败；而手写版 parser 有「长文本兜底」策略，在弱模型上更鲁棒。
+ 
+详细分析见 [docs/custom_vs_langchain.md](docs/custom_vs_langchain.md)。
+ 
+### 关键收获
+ 
+- AgentExecutor 源码级理解：`_call` 主循环、`_should_continue` 终止条件、`_take_next_step` 单步执行、`return_direct` fast-path、`early_stopping_method` 兜底
+- LangChain 10 层抽象：Runnable、Messages、Prompts、Parsers、Tools、Memory、Retrievers、Chains、Agents、Callbacks
+- 框架 vs 手写的真实 tradeoff：框架不是银弹，弱模型场景下手写的针对性适配可能更有效
+### 代码变化
+ 
+- 新增 `src/agent/langchain_agent.py`：LangChain Agent 入口
+- 新增 `src/agent/langchain_tools.py`：@tool 包装 + sanitize
+- 新增 `src/agent/langchain_callbacks.py`：TraceCallback 实现
+- 新增 `docs/custom_vs_langchain.md`：手写 vs 框架对比
+- 新增 `docs/week7_notes.md`：Week 7 学习笔记（6 个核心问题）
+- 更新 `docs/TROUBLESHOOTING.md`：7 条新条目（#15-21）
