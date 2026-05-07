@@ -4,6 +4,7 @@ from src.agent.prompts import SYSTEM_PROMPT
 from src.agent.tool_registry import ToolRegistry
 from src.tools.price import get_crypto_price
 from src.tools.market import get_market_overview,get_coin_market
+from src.tools.rag_search import search_knowledge_base
 from src.tools.analyzer import analyze_coin
 import json
 from src.agent.trace import trace_record
@@ -20,6 +21,8 @@ class AgentRunner:
                                {"coin_id": "要查询的代币，如 bitcoin、ethereum"})
         self.tool_registry.register("analyze_coin",analyze_coin,"对指定币种进行深度行情分析",
                                     {"symbol":"要查询的代币"})
+        self.tool_registry.register("search_rag_knowledge",search_knowledge_base,"检索相关输入，在权威的加密货币相关知识库中获取语义最接近的文本。查询加密货币概念知识库，回答「什么是 X」「X 的原理是什么」「X 和 Y 的区别」等概念类问题",
+                                    {"query":"要查询的问题或关键词"})
 
     def reset(self):
         """
@@ -156,6 +159,6 @@ class AgentRunner:
 
 if __name__ == "__main__":
     agent_runner = AgentRunner()
-    agent_runner.run("帮我分析一下 ETH 的行情")
+    agent_runner.run("告诉我以太坊的技术原理和当前价格")
 
 
