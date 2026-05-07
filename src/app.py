@@ -10,7 +10,6 @@ from src.tools.price import get_crypto_price,load_price_history
 from src.tools.analyzer import analyze_coin
 from src.tools.market import get_market_overview,get_coin_market
 from src.agent.agent_runner import AgentRunner
-from src.agent.langchain_agent import langchain_agent_run
 import streamlit as st
 from src.utils.config import HISTORY_FILE
 from dotenv import load_dotenv
@@ -40,7 +39,7 @@ with tab1:
     custom_coin = st.text_input("或手动输入币种（留空则用上面的选择）")
     coin = custom_coin.strip() if custom_coin.strip() else coin_selected
     agent_text = st.text_input("若要点击Agent模式，请在此输入要询问的问题")
-    col1, col2, col3, col4 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         if st.button("查询价格"):

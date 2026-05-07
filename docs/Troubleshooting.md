@@ -660,3 +660,45 @@ step_log.append({
 解决：用 parent_run_id is None 判断是否是顶层 AgentExecutor 的事件。顶层 chain 的 parent_run_id 是 None，子链的 parent_run_id 指向父链的 run_id。
 
 注意：parent_run_id 和 run_id 不一样。run_id 是本次调用的唯一 ID（永远不为 None），parent_run_id 是父调用的 ID（顶层为 None）。
+
+# TROUBLESHOOTING - Week 8 新增条目
+
+## 22. MiniLM 跨语言 embedding 相似度极低
+
+现象：用 all-MiniLM-L6-v2 对 "bitcoin" 和 "比特币" 做 embedding，cosine similarity 只有 0.10。预期应该 > 0.5。
+
+根因：all-MiniLM-L6-v2 虽然号称支持多语言，但对中英文跨语言的语义对齐能力很弱。它在英文同义词上表现正常（"bitcoin" vs "BTC" = 0.72），但无法将中文和英文的同义词映射到向量空间中相近的位置。
+
+解决：本项目语料是英文，所以在 SYSTEM_PROMPT 里引导 Agent 用英文关键词检索（示例 3 里 Action Input 写的是英文 query）。
+
+教训：选 embedding 模型时必须测跨语言能力，不能只看模型名字里有没有 "multilingual"。如果需要中英混合检索，应该用 multilingual-e5-base、BGE-M3 等真正的多语言模型。
+
+## 23. LLM 编造 Observation 绕过工具调用
+
+现象：测试「对比 BTC 和 ETH 价格」时，Agent 正确调用了 get_price(bitcoin) 拿到 BTC 价格，但随后 LLM 自己伪造了一个 ETH 的 Observation（价格 $1,942.62），和真实价格（$2,339.82）严重不符。
+
+根因：MiniMax 的格式遵从度不够。LLM 在一次输出里同时生成了 Action（查 ETH）和伪造的 Observation + Final Answer，parser 读到 Final Answer 后直接返回，没有等工具真实执行。
+
+解决：这是 MiniMax 模型层面的问题，在 Week 8 无法根治。可以通过更严格的 prompt 约束（「禁止在输出里包含 Observation」已经写了但模型不一定遵守）或者在 parser 里检测是否存在未经工具返回的 Observation 来缓解。
+
+教训：LLM 输出的所有内容都是不可信的，包括它声称的「工具返回结果」。只有系统级的 Observation（由 agent_runner 注入）才可信。这是 Agent 安全性的核心问题之一。
+
+## 24. Chroma 的 distance 和 similarity 概念混淆
+
+现象：开发时把 Chroma 返回的 distance 当成 similarity 使用，导致排序逻辑混乱。
+
+根因：Chroma 的 query 返回的是 L2 距离（欧氏距离），距离越小越相似。而 sklearn 的 cosine_similarity 返回的是相似度，值越大越相似。两者方向相反。
+
+解决：在 VectorStore.search 的返回字段里明确命名为 "distance" 而不是 "score" 或 "similarity"，避免调用方误解。在笔记里记录清楚 Chroma 默认用 L2 距离。
+
+教训：不同库对「相似度」的定义和度量方式不同。cosine similarity（范围 -1 到 1，越大越相似）、cosine distance（1 减 cosine similarity）、L2 distance（欧氏距离，越小越相似）是三个不同的概念。使用前必须搞清楚当前库返回的是哪个。
+
+## 25. chromadb PersistentClient 路径为相对路径导致数据创建在意外位置
+
+现象：VectorStore 初始化时 persist_dir 使用相对路径 "data/vector_db"，在 PyCharm 中直接运行脚本时数据创建在了非项目根目录下。
+
+根因：相对路径相对于运行脚本时的当前工作目录（cwd），PyCharm 的 cwd 设置可能和终端不一样。
+
+解决：在 src/utils/config.py 里统一定义 VECTOR_DB_DIR 和 DOCS_DIR，用 os.path.dirname + os.path.abspath 推算项目根目录，所有文件都从 config 引用绝对路径。
+
+教训：项目里的所有路径都应该从一个统一的 config 出发，不要硬编码相对路径或绝对路径。硬编码绝对路径会泄露个人信息（如用户名），硬编码相对路径会因 cwd 不同导致文件位置不可预测。

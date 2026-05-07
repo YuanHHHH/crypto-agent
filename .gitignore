@@ -1,6 +1,7 @@
 # 数据文件
 data/price_history.jsonl
 data/traces/
+data/vector_db/
 
 # 环境变量
 .env
