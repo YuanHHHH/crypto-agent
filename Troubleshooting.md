@@ -702,3 +702,73 @@ step_log.append({
 解决：在 src/utils/config.py 里统一定义 VECTOR_DB_DIR 和 DOCS_DIR，用 os.path.dirname + os.path.abspath 推算项目根目录，所有文件都从 config 引用绝对路径。
 
 教训：项目里的所有路径都应该从一个统一的 config 出发，不要硬编码相对路径或绝对路径。硬编码绝对路径会泄露个人信息（如用户名），硬编码相对路径会因 cwd 不同导致文件位置不可预测。
+
+# TROUBLESHOOTING - Week 9 新增条目
+
+## 26. LangGraph State 字段过多导致设计冗余
+
+现象：Day 2 设计 State 时写了 8 个字段（user_input、messages、llm_output、tool_call、final_answer、usetool、toolname、tool_param），Day 4 实现后发现只有 messages 被实际读写，其他字段全是摆设。
+
+根因：用手写版 ReAct Agent 的心智模型来设计 LangGraph State。手写版需要独立字段因为 LLM 输出是自由文本，必须用 parser 提取到各个变量里。LangGraph + Function Calling 模式下，所有信息都编码在 Message 类型系统里（AIMessage.tool_calls、ToolMessage.content 等），不需要额外字段。
+
+解决：State 砍到只剩 `messages: Annotated[list[BaseMessage], add_messages]`。后来加 interrupt 时增加了 `tool_approved: str`，这是因为 interrupt 确认结果不适合放在 messages 里。
+
+教训：设计 State 时先问「这个信息能不能从 messages 里读出来」，能读就不要加字段。State 字段越少，维护越简单。
+
+## 27. start_node 不应该放在 graph 内部
+
+现象：Day 4 第一版代码在 graph 里加了一个 start_node，内部调用 input() 获取用户输入。代码能跑但设计不对。
+
+根因：混淆了 graph 的职责。graph 的职责是「接收输入 State → 处理 → 返回输出 State」，用户交互（input()、Streamlit 输入框、API 请求）是 graph 外部的事。graph 应该是纯粹的处理引擎，不关心输入从哪来。
+
+解决：删掉 start_node，用户输入在 graph.invoke() 调用前处理，把 SystemMessage + HumanMessage 作为初始 State 传入。
+
+教训：graph 里的 node 应该是纯函数（输入 state → 输出 dict），不能有 input()、print() 等副作用。副作用放在 graph 外面。
+
+## 28. MiniMax Function Calling 后 ReAct prompt 残留导致混合输出
+
+现象：Day 4 第一次跑通后，LLM 返回的 content 里混着 `<think>` 标签、`Thought:` 前缀和 `Final Answer:` 前缀，但 tool_calls 字段正常。最终输出有冗余格式文本。
+
+根因：system prompt 还在用 Week 5-6 的 SYSTEM_PROMPT（包含 ReAct 格式规定和 few-shot 示例）。Function Calling 模式下 LLM 通过 tool_calls 表达工具调用，不需要在 content 里写 Action/Action Input，但 prompt 里的格式规定让 LLM 两种格式都输出了。
+
+解决：system prompt 简化为 4 行纯业务指令，删掉所有格式规定和 few-shot 示例。
+
+教训：切换工具调用协议时，prompt 必须同步调整。Function Calling 不需要 ReAct 格式约束，保留会导致 LLM 混合输出。
+
+## 29. graph.invoke() 不传参数报错
+
+现象：代码最后一行写了 `graph.invoke()` 没传参数，运行直接报错。
+
+根因：invoke 需要初始 State 作为输入。手写版的 AgentRunner.run() 接收 user_question 字符串，但 LangGraph 的 invoke 需要完整的 State dict。
+
+解决：`graph.invoke({"messages": [SystemMessage(...), HumanMessage(...)]})`。
+
+## 30. TypedDict 运行时不校验类型导致静默错误
+
+现象：Day 3 hello 图里 `messages` 定义为 `list[str]`，但 invoke 时传了一个 str 而不是 list。代码没报错但 len() 返回的是字符数而不是消息数，conditional_edge 走了错误分支。
+
+根因：TypedDict 是静态类型标注，Python 运行时不做校验。传错类型不会报错，只是行为偏离预期。
+
+解决：观察到输出异常后改成正确类型 `["hello", "langgraph"]`。生产环境应该用 Pydantic BaseModel 替代 TypedDict，Pydantic 会在运行时强制校验。
+
+教训：Day 1 学概念时就提到过「TypedDict 运行时不校验，Pydantic 会校验」，Day 3 实际踩到了。
+
+## 31. CoinGecko SSL 限流导致批量测试部分失败
+
+现象：compare_agents.py 批量测试 15 个 API 请求（3 版 x 5 题），测试 2 的 LangChain、测试 5 的手写版和 LangChain 报 SSLEOFError。
+
+根因：短时间内发起太多 HTTPS 请求，CoinGecko 或中间代理的 SSL 连接池耗尽，直接断开连接。不是 429 限流，是 SSL 握手阶段就失败了。
+
+解决：测试之间加 3 秒间隔（time.sleep(3)）。LangGraph 版测试 5 第一次也 SSL 报错但 retry 成功了，说明 langchain_tools 里的 retry 装饰器在 LangGraph 版里也生效了。
+
+教训：批量测试 Agent 时必须控制请求频率。CoinGecko 免费 tier 的限流不只是 429，还有 SSL 层面的连接拒绝。
+
+## 32. Checkpointer thread_id 不传导致每次都是新会话
+
+现象：Day 5 第一次测试多轮对话时，第二轮「那 ETH 呢」Agent 不理解上下文，当作全新问题处理。
+
+根因：invoke 时忘了传 config（包含 thread_id）。没有 thread_id 的 invoke 每次都是独立会话，Checkpointer 不知道该恢复哪个状态。
+
+解决：每次 invoke 和 stream 都传 `config={"configurable": {"thread_id": "user1"}}`。
+
+教训：Checkpointer 的多轮记忆依赖 thread_id。生产环境下 thread_id 应该用 user_id 或 session_id，不能用固定字符串。

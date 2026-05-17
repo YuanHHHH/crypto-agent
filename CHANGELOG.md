@@ -1,5 +1,45 @@
 # Changelog
 
+# CHANGELOG - Week 9 新增
+
+## v0.8 - Week 9: LangGraph 状态图 Agent
+
+### Added
+- LangGraph 版 Agent（`src/agent/langgraph_agent.py`），使用 StateGraph + Function Calling 实现
+- State 定义：仅 `messages: Annotated[list[BaseMessage], add_messages]`，通过 Message 类型系统编码全部信息
+- 2 个 Node：think_node（调 LLM）+ tool_node（ToolNode 自动执行工具）
+- conditional_edge：根据 AIMessage.tool_calls 是否存在判断走 tools 还是 END
+- MiniMax M2.7 Function Calling 集成：通过 `llm.bind_tools(tools)` 绑定工具，模型返回结构化 tool_calls
+- Checkpointer 多轮对话：InMemorySaver + thread_id 区分会话
+- interrupt/resume 人工审核：工具调用前暂停等待用户确认，支持 yes/no 两个分支 + reject_node
+- record_step 函数：统一 trace 记录逻辑，主循环和 resume 循环共用
+- 三版 Agent 对比测试脚本（`scripts/compare_agents.py`）
+- 三版对比文档（`docs/three_versions_comparison.md`）
+- Week 9 学习笔记（`docs/week9_notes.md`）
+- Week 9 每日反思（`docs/week9_daily_reflection.md`）
+- TROUBLESHOOTING 7 条新条目（#26-#32）
+
+### Changed
+- system prompt 从 ReAct 格式规定（50 行）简化为 4 行纯业务指令
+- 工具调用协议从 ReAct 文本协议升级为 Function Calling 结构化协议
+- 工具执行从 ToolRegistry.call() 手动分发改为 ToolNode 自动执行
+- langchain_tools.py 新增 search_rag 工具（Week 8 的 RAG 检索）
+
+### Test Results
+- LangGraph 版 5/5 测试用例全部通过（手写版 3/5，LangChain 版 2/5）
+- 支持 parallel tool calls（「对比 BTC 和 ETH」一次返回两个 tool_calls）
+- 平均耗时 8.8s（手写版 9.7s，LangChain 版 18.6s）
+
+### Key Insights
+- Function Calling 消除了 ReAct 文本协议的 parser 脆弱性，parser.py 和 prompts.py 的格式约束在 LangGraph 版不再需要
+- MiniMax 的 `<minimax:tool_call>` 标签混入问题在 Function Calling 模式下完全消失
+- Checkpointer 实现了真正的跨 invoke 状态持久化，LangChain 的 ConversationBufferMemory 只是内存级别
+- interrupt/resume 是 LangGraph 独有的生产级特性，手写版和 LangChain 版无法实现
+
+### Dependencies
+- langgraph（新增）
+- langgraph-checkpoint（新增，InMemorySaver）
+
 ## Week 6: Agent 深化 + 对话记忆 + 质量评估
 
 ### Day 1

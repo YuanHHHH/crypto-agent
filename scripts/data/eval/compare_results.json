@@ -1,0 +1,167 @@
+[
+  {
+    "version": "handwritten",
+    "success": true,
+    "answer": "BTC 当前价格为 **$78,054**，24h 涨幅 **-0.4%**（小幅下跌）。",
+    "steps": 2,
+    "time": 10.31,
+    "error": null,
+    "question_id": 1,
+    "question": "BTC 现在多少钱",
+    "question_type": "单工具"
+  },
+  {
+    "version": "langchain",
+    "success": true,
+    "answer": "BTC（比特币）当前价格为 **$78,054**，24小时涨跌幅为 **-0.40%**，价格略有下跌。\n\n如需了解更多详情（如市值、交易量等），请随时告诉我。",
+    "steps": 0,
+    "time": 8.27,
+    "error": null,
+    "question_id": 1,
+    "question": "BTC 现在多少钱",
+    "question_type": "单工具"
+  },
+  {
+    "version": "langgraph",
+    "success": true,
+    "answer": "<think>BTC 当前价格约为 $78,054，24 小时涨跌幅为 -0.40%，当前市场整体呈下跌趋势。\n</think>\n\n**BTC（比特币）当前价格：$78,054**\n\n24小时涨跌幅：**-0.40%**\n\n（数据时间：2026-05-17 16:52:36）",
+    "steps": 3,
+    "time": 4.65,
+    "error": null,
+    "question_id": 1,
+    "question": "BTC 现在多少钱",
+    "question_type": "单工具"
+  },
+  {
+    "version": "handwritten",
+    "success": true,
+    "answer": "以太坊（ETH）当前市场价格为 $2,184.87，24小时变化率为 -0.39%。从数据来看，ETH 在最近24小时内有小幅下跌，市场整体呈现微弱的看跌情绪。",
+    "steps": 2,
+    "time": 22.07,
+    "error": null,
+    "question_id": 2,
+    "question": "以太坊最近的市场数据怎么样",
+    "question_type": "单工具"
+  },
+  {
+    "version": "langchain",
+    "success": false,
+    "answer": "",
+    "steps": 0,
+    "time": 15.99,
+    "error": "HTTPSConnectionPool(host='api.coingecko.com', port=443): Max retries exceeded with url: /api/v3/coins/markets?vs_currency=usd&ids=ethereum (Caused by SSLError(SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:1129)')))",
+    "question_id": 2,
+    "question": "以太坊最近的市场数据怎么样",
+    "question_type": "单工具"
+  },
+  {
+    "version": "langgraph",
+    "success": true,
+    "answer": "<think>用户询问以太坊的市场数据，已经获取到了相关数据，现在整理给用户。</think>\n\n根据最新数据，以太坊（ETH）近期市场情况如下：\n\n**价格信息**\n- 当前价格：约 2,193 美元\n- 24小时最低：约 2,165 美元\n- 24小时最高：约 2,193 美元\n\n**市场数据**\n- 市值：约 2,636.5 亿美元（排名第一）\n- 24小时交易额：约 93.2 亿美元\n- 24小时价格变化：下降约 8.66 美元\n\n**历史数据**\n- 历史最高价：约 4,946 美元\n\n目前 ETH 交易价格接近 24 小时高点，整体市场交易活跃度较高。如果您需要更详细的分析，我可以进一步为您解读。",
+    "steps": 3,
+    "time": 10.28,
+    "error": null,
+    "question_id": 2,
+    "question": "以太坊最近的市场数据怎么样",
+    "question_type": "单工具"
+  },
+  {
+    "version": "handwritten",
+    "success": false,
+    "answer": "",
+    "steps": 1,
+    "time": 2.25,
+    "error": null,
+    "question_id": 3,
+    "question": "现在加密市场整体行情如何",
+    "question_type": "单工具"
+  },
+  {
+    "version": "langchain",
+    "success": true,
+    "answer": "基于最新的市场数据，我来为您分析当前加密货币市场的整体行情：\n\n## 📊 市场整体概览\n\n| 指标 | 数值 | 状态 |\n|------|------|------|\n| 总市值 | **2.69 万亿美元** | 规模庞大 |\n| 24小时交易量 | **5,767 亿美元** | 流动性充足 |\n| 市值24h变化 | **-0.25%** | 小幅回调 |\n| 活跃加密货币 | **17,423 种** | 市场活跃度高 |\n\n## 🏆 主流币种主导地位\n\n- **BTC 占比：58.23%** — 比特币仍然占据绝对主导地位\n- **ETH 占比：9.82%** — 以太坊稳居第二\n- 两者的总占比接近 **68%**，说明市场资金仍集中在头部资产\n\n## 📈 趋势分析\n\n1. **短期承压**：市值小幅下降0.25%，显示出市场在近期上涨后出现小幅回调\n2. **流动性健康**：日交易量达5767亿美元，表明市场活跃度良好\n3. **BTC主导稳固**：比特币占比超过58%，市场仍由BTC走势主导\n4. **ETH表现稳定**：以太坊保持9.82%的市场份额，生态发展稳健\n\n## 💡 总结与建议\n\n当前市场整体处于 **小幅调整阶段**，并非趋势性下跌。市场情绪保持相对稳定，资金仍在加密市场内流动。\n\n**操作建议**：\n- 短期关注BTC在关键支撑位的表现\n- 可以考虑在回调时适当布局优质资产\n- 注意控制仓位，分散风险\n- 长期投资者可以保持定投策略\n\n如果您想了解某个具体币种的详细分析，或者想获取某个币的实时价格，请随时告诉我！",
+    "steps": 0,
+    "time": 42.92,
+    "error": null,
+    "question_id": 3,
+    "question": "现在加密市场整体行情如何",
+    "question_type": "单工具"
+  },
+  {
+    "version": "langgraph",
+    "success": true,
+    "answer": "<think>用户询问整体市场行情，我已获取到全球加密货币市场的整体数据。现在来分析这些数据并给出一个清晰、全面的回答。\n\n从返回的数据来看：\n1. 全球总市值约为 2.685 万亿美元\n2. 24小时交易量约为 5767 亿美元\n3. BTC 主导率约 58.23%\n4. ETH 主导率约 9.82%\n5. 市场在过去的24小时内下跌了约 -0.25%\n6. 市场上共有 17,423 种活跃加密货币\n\n市场变化幅度很小，属于小幅波动，整体偏弱。让我为用户详细解读这些数据。</think>\n\n当前加密货币市场整体行情如下：\n\n## 📊 全球市场概况\n\n| 指标 | 数值 |\n|------|------|\n| **总市值** | $2.685 万亿 |\n| **24h交易量** | $5767 亿 |\n| **活跃币种** | 17,423 种 |\n\n## 📈 市场主导地位\n- **BTC 主导率**: 58.23%\n- **ETH 主导率**: 9.82%\n\n## 🔄 24小时变化\n**市场整体小幅下跌 -0.25%**\n\n## 💡 行情简析\n\n当前市场处于**小幅回调状态**，波动不大，属于正常整理阶段。比特币主导率维持在较高水平（约58%），说明市场资金仍集中在BTC等主流币种。\n\n**整体评估**：市场偏弱但无大幅波动，风险偏好一般，建议关注BTC和ETH走势作为市场风向标。",
+    "steps": 3,
+    "time": 11.04,
+    "error": null,
+    "question_id": 3,
+    "question": "现在加密市场整体行情如何",
+    "question_type": "单工具"
+  },
+  {
+    "version": "handwritten",
+    "success": true,
+    "answer": "你好！我是加密货币分析 Agent，专注于加密货币市场的数据分析。我可以帮助你：\n\n- 查询各种加密货币（如 BTC、ETH 等）的实时价格\n- 获取市场整体数据\n- 分析特定币种的行情走势\n- 解答加密货币相关的概念问题\n\n有什么加密货币方面的问题我可以帮你解答吗？",
+    "steps": 1,
+    "time": 3.29,
+    "error": null,
+    "question_id": 4,
+    "question": "你好，你是谁",
+    "question_type": "无工具"
+  },
+  {
+    "version": "langchain",
+    "success": false,
+    "answer": "",
+    "steps": 0,
+    "time": 16.25,
+    "error": "Connection error.",
+    "question_id": 4,
+    "question": "你好，你是谁",
+    "question_type": "无工具"
+  },
+  {
+    "version": "langgraph",
+    "success": true,
+    "answer": "<think>用户问我是谁，这是一个关于我身份的问题。我应该介绍自己，说明我是加密货币分析助手，可以帮助用户查询加密货币相关信息。</think>\n\n你好！我是加密货币分析助手，专门为您提供加密货币相关的分析服务。\n\n我可以帮助您：\n\n- 📊 查询实时价格和行情数据\n- 📈 进行深度行情分析\n- 🌍 查看全球加密货币市场概况\n- 💰 了解特定代币的详细信息\n- ❓ 解答加密货币概念性问题\n\n请问有什么我可以帮您的？",
+    "steps": 1,
+    "time": 4.25,
+    "error": null,
+    "question_id": 4,
+    "question": "你好，你是谁",
+    "question_type": "无工具"
+  },
+  {
+    "version": "handwritten",
+    "success": false,
+    "answer": "",
+    "steps": 0,
+    "time": 10.69,
+    "error": "HTTPSConnectionPool(host='api.coingecko.com', port=443): Max retries exceeded with url: /api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true (Caused by SSLError(SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:1129)')))",
+    "question_id": 5,
+    "question": "对比一下 BTC 和 ETH 的价格",
+    "question_type": "多工具"
+  },
+  {
+    "version": "langchain",
+    "success": false,
+    "answer": "",
+    "steps": 0,
+    "time": 9.63,
+    "error": "HTTPSConnectionPool(host='api.coingecko.com', port=443): Max retries exceeded with url: /api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true (Caused by SSLError(SSLEOFError(8, 'EOF occurred in violation of protocol (_ssl.c:1129)')))",
+    "question_id": 5,
+    "question": "对比一下 BTC 和 ETH 的价格",
+    "question_type": "多工具"
+  },
+  {
+    "version": "langgraph",
+    "success": true,
+    "answer": "<think>好的，我获取到了 BTC 和 ETH 的价格数据。现在来对比一下：\n\nBTC (Bitcoin):\n- 价格：78,057 USD\n- 24小时变化：-0.41%\n\nETH (Ethereum):\n- 价格：2,185 USD\n- 24小时变化：-0.36%\n\nBTC 的价格远高于 ETH，BTC 目前的价格大约是 ETH 的 35.7 倍。两者的 24 小时变化都是负的，但跌幅相近，ETH 略小一些。\n</think>\n\n## BTC 与 ETH 价格对比\n\n| 项目 | BTC (Bitcoin) | ETH (Ethereum) |\n|------|---------------|----------------|\n| **价格** | $78,057 | $2,185 |\n| **24h 涨跌幅** | -0.41% | -0.36% |\n| **价格比例** | BTC ≈ ETH 的 **35.7 倍** |\n\n### 小结：\n- 目前 BTC 价格约 $78,057，ETH 价格约 $2,185\n- 两者 24 小时均小幅下跌，跌幅接近\n- BTC 作为\"数字黄金\"，价格远高于 ETH；ETH 因智能合约功能生态，价格相对较低",
+    "steps": 5,
+    "time": 13.64,
+    "error": null,
+    "question_id": 5,
+    "question": "对比一下 BTC 和 ETH 的价格",
+    "question_type": "多工具"
+  }
+]
