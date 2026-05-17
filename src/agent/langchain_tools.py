@@ -2,10 +2,12 @@ from src.tools.price import get_crypto_price as _get_crypto_price
 from src.tools.market import get_market_overview as _get_market_overview
 from src.tools.market import get_coin_market as _get_coin_market
 from src.tools.analyzer import analyze_coin as _analyze_coin
+from src.rag.vector_store import VectorStore
 from langchain_core.tools import tool
 
 import json
 
+vs = VectorStore()
 
 def _sanitize(raw: str) -> str:
     """清洗 LLM 输出的参数。
@@ -57,3 +59,8 @@ def get_coin_detail(coin_id: str) -> dict:
 def analyze_coin(symbol: str) -> dict:
     """对指定币种进行深度行情分析，symbol 参数是币种英文名，如 bitcoin、ethereum。"""
     return _analyze_coin(_sanitize(symbol))
+
+@tool
+def search_rag(query: str) -> list:
+    """检索相关输入，在权威的加密货币相关知识库中获取语义最接近的文本。查询加密货币概念知识库，回答「什么是 X」「X 的原理是什么」「X 和 Y 的区别」等概念类问题，query参数是要查询的问题或关键词，例如；什么是bitcoin"""
+    return vs.search(query)

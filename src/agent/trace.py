@@ -10,5 +10,5 @@ def trace_record(new_record):
     """
     new_record["time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     os.makedirs(os.path.dirname(TRACE_FILE), exist_ok=True)
-    with open(TRACE_FILE, "a") as f:
-        f.write(json.dumps(new_record)+ "\n")
+    with open(TRACE_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(new_record,ensure_ascii=False)+ "\n")
