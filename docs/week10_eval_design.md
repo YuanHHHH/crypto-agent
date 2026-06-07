@@ -14,6 +14,23 @@
   "notes": "标注备注"
 }
 
+{
+  "id": 1,
+  "question": "用户问题",
+  "capability": "basic | context | boundary | complex",
+  "sub_type": "single_tool | multi_tool | concept | ...",
+  "required_tools": ["必须用到的工具"],
+  "optional_tools": ["可选工具，用了更好不用也行"],
+  "expected_answer_points": ["关键点1", "关键点2"],
+  "rule_checks": {
+    "must_call_tool": true,
+    "max_steps": 5,
+    "min_tool_calls": 2,
+    "required_response_fields": ["price"],
+    "response_contains": []
+  },
+  "notes": "标注备注"
+}
 
 system prompt
 """

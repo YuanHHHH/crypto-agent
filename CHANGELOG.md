@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.9 - Week 10：Eval 体系深度升级
+
+### Added
+
+**评估标注集**
+
+- 新增 `data/eval/eval_set_v1.jsonl`：15 个评估 case，覆盖 basic / context / boundary / complex 四类能力面
+- 支持 `required_tools`（必须调用）和 `optional_tools`（可选调用）分层标注
+- 支持 `rule_checks`：must_call_tool / max_steps / required_response_fields / response_contains
+
+**评估模块**
+
+- 新增 `src/agent/eval_rules.py`：规则评估（工具路径、字段、步数、错误标记、关键词）
+- 新增 `src/agent/eval_judge.py`：LLM-as-judge，Kimi k2.6 作为裁判，输出 accuracy/completeness/relevance 三维评分
+- 新增 `src/agent/eval_runners.py`：三版 Agent 统一 runner（LangGraph/LangChain/手写版），输出统一格式
+
+**运行脚本**
+
+- 新增 `scripts/run_eval.py`：批量评估，逐 case 跑三版 Agent，结果追加到 JSONL
+- 新增 `scripts/rerun_failed_eval.py`：失败样本自动重跑，支持 judge-only 和 agent+judge 两种模式
+
+**分析**
+
+- 新增 `docs/failure_analysis.md`：失败案例逐条根因分析，含修复优先级
+
+### Changed
+
+- `eval_rules.py` 加入 `normalize_tool_name`，统一 `search_rag_knowledge` → `search_rag` 的工具名别名
+- `run_eval.py` 加入 `safe_judge`：Agent 本身失败时跳过 judge 调用，直接给 0 分
+- `eval_judge.py` 加入异常结构检查：API 返回无 `choices` 字段时兜底返回 0 分
+
+### Fixed
+
+- 修复 eval_result.jsonl 循环写入时被 `"w"` 模式覆盖的问题
+- 修复 Python 3.9 + LibreSSL 导致 CoinGecko SSL 请求不稳定，升级到 Python 3.11 + OpenSSL 3.x
+- 修复 VPN 全局模式导致国内/国外 API 同时失败，改为分流配置
+
+### Known Issues
+
+- Case9/Case10 三版 Agent 均未通过 `response_contains` 检查，标注关键词需要扩充同义词
+- LangGraph step 计算方式和手写版不一致，Case14 max_steps 偏严，下版更新为 8
+- 手写版 `InvalidCoinError` 直接冒泡，未进入 LLM 错误恢复路径（Case9/Case10 手写版失败）
+- LangChain ReAct 版在工具调用场景失败率约 70%，归类为对照组，不继续主线维护
+
+### Eval 结论
+
+本次评估（12 个非 context case，三版对比）：
+
+| 版本 | 规则 pass 率 | judge 平均分（有效 case）|
+|------|------------|----------------------|
+| 手写版 | 83% (10/12) | acc=8.9 comp=9.4 rel=9.7 |
+| LangGraph | 75% (9/12) | acc=8.9 comp=8.9 rel=9.8 |
+| LangChain | 33% (4/12) | acc=7.6 comp=10.0 rel=9.8 |
+
+LangGraph 继续作为主线版本。
+
 # CHANGELOG - Week 9 新增
 
 ## v0.8 - Week 9: LangGraph 状态图 Agent
