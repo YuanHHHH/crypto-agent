@@ -772,3 +772,340 @@ step_log.append({
 解决：每次 invoke 和 stream 都传 `config={"configurable": {"thread_id": "user1"}}`。
 
 教训：Checkpointer 的多轮记忆依赖 thread_id。生产环境下 thread_id 应该用 user_id 或 session_id，不能用固定字符串。
+
+## Week 10: Eval 体系建设
+
+### LLM-as-judge prompt 反复试错
+
+**问题**
+
+最初设计 judge prompt 时，裁判模型容易出现：
+
+- 输出不是严格 JSON（带 markdown 代码块或额外文字）
+- 对实时价格做事实验证（LLM 不知道 BTC 当前真实价格，却试图判断 accuracy）
+- accuracy 给分过于保守（看到「2026 年数据」就认为可能是编造的）
+- reasoning 很长但三个字段缺失
+
+**根因**
+
+judge prompt 没有明确说明：
+
+1. 你无法验证实时数据的真伪
+2. accuracy 主要看是否调用了工具，而不是验证数字
+3. 输出格式必须是纯 JSON，不能有其他任何内容
+
+**解决方案**
+
+在 SYSTEM_PROMPT 里明确加入：
+
+```
+3. 你无法验证实时数据的准确性（比如你不知道 BTC 当前真实价格），
+   所以 accuracy 主要看 Agent 是否调用了工具获取数据，而不是验证具体数字
+4. 输出必须是严格的 JSON 格式，不要包含 markdown 代码块或其他任何内容
+```
+
+同时加入 `"response_format": {"type": "json_object"}` 和 `"thinking": {"type": "disabled"}` 参数，强制 JSON 输出并关闭 thinking 模式，减少格式混乱。
+
+面试怎么说：LLM judge 的设计需要显式说明它的「能力边界」，让它知道哪些事情它判断不了。
+
+---
+
+### Kimi judge API 偶尔返回异常结构
+
+**问题**
+
+调用 judge API 时，有时返回的 JSON 里没有 `choices` 字段，导致代码报错：
+
+```
+[JUDGE ERROR] 'choices'
+```
+
+有时 API 超时，有时返回速率限制错误，结构和正常返回完全不同。
+
+**根因**
+
+网络不稳定 + API 服务端偶发错误。
+
+**解决方案**
+
+在 `eval_judge.py` 里加入异常结构检查：
+
+```python
+if "choices" not in result:
+    print("[JUDGE RAW RESPONSE]", result)
+    return {
+        "reasoning": f"judge 返回异常结构: {result}",
+        "accuracy": 0,
+        "completeness": 0,
+        "relevance": 0,
+    }
+```
+
+同时在 `run_eval.py` 里加入 `safe_judge`：
+
+```python
+def safe_judge(question, agent_result, expected_answer_points):
+    final_answer = agent_result.get("final_answer", "") or ""
+    if "[ERROR]" in final_answer or "[FAILED]" in final_answer:
+        return {
+            "reasoning": "Agent 执行失败，跳过 LLM judge",
+            "accuracy": 0,
+            "completeness": 0,
+            "relevance": 0,
+        }
+    return judge_response(...)
+```
+
+Agent 本身已失败时不调用 judge，避免把「评估 `[ERROR]` 内容」的问题丢给 judge。
+
+---
+
+### 测试集标注一致性问题
+
+**问题一：工具名不一致**
+
+手写版工具名是 `search_rag_knowledge`，LangGraph/LangChain 版工具名是 `search_rag`，两者语义完全一致，但规则评估把它们当成不同工具。
+
+**解决方案**
+
+在 `eval_rules.py` 加入归一化：
+
+```python
+def normalize_tool_name(tool_name: str) -> str:
+    alias_map = {
+        "search_rag_knowledge": "search_rag",
+    }
+    return alias_map.get(tool_name, tool_name)
+
+tools_called = [normalize_tool_name(tool) for tool in tools_called]
+```
+
+**问题二：max_steps 口径不一致**
+
+LangGraph 的 `total_steps` 是 `graph.stream()` 的 yield 次数，手写版是 `step_log` 的长度。相同任务 LangGraph 天然比手写版多 1-2 步，被统一 max_steps 误伤。
+
+**根因**
+
+LangGraph 的每个节点（think_node / tool_node）各算一步，手写版只记录业务步骤。
+
+**解决方案（短期）**
+
+对受影响的 case 适当放宽 max_steps：
+
+- Case14（PoS vs PoW）：max_steps 从 5 改为 8
+
+**解决方案（长期）**
+
+引入 `tool_call_count` 字段作为主要步数指标，屏蔽不同 Agent 的节点粒度差异。
+
+**问题三：response_contains 关键词覆盖不全**
+
+Case9 LangGraph 的回答是「系统未能识别 BTCC 作为一个加密货币代币」，语义正确，但 `response_contains = ["未找到", "不存在", "无法识别", "无法查询"]` 全部未命中。
+
+**解决方案**
+
+response_contains 增加同义词：`["未找到", "未能找到", "未能识别", "不存在", "无法识别", "无法查询", "没有找到"]`
+
+面试怎么说：Eval 标注和 Agent 输出之间的软匹配问题，严格字符串匹配会误伤语义正确的回答。
+
+---
+
+### 评估阻塞 bug 修复记录
+
+**Bug 1：eval_result.jsonl 循环写入被覆盖**
+
+初始代码：
+
+```python
+with open("../data/eval/eval_result.jsonl", "w", encoding="utf-8") as f:
+    for record in records:
+        f.write(...)
+```
+
+问题：每次 case 都用 `"w"` 模式，后面的结果覆盖前面的。
+
+修复：循环前用 `"w"` 清空文件，循环内用 `"a"` 追加写入：
+
+```python
+# 循环前清空
+with open("../data/eval/eval_result.jsonl", "w", encoding="utf-8") as f:
+    pass
+
+# 循环内追加
+with open("../data/eval/eval_result.jsonl", "a", encoding="utf-8") as f:
+    for record in records:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+```
+
+---
+
+**Bug 2：Python 3.9 + LibreSSL 导致 CoinGecko SSL 请求不稳定**
+
+错误信息：
+
+```
+urllib3 v2 only supports OpenSSL 1.1.1+
+currently ssl module is compiled with LibreSSL 2.8.3
+SSLEOFError: EOF occurred in violation of protocol
+```
+
+根因：Mac 系统 Python 3.9 用的是 LibreSSL，版本过旧，和 CoinGecko 的 SSL 握手不兼容。
+
+解决方案：升级到 Python 3.11（Homebrew 安装，带 OpenSSL 3.x）：
+
+```bash
+brew install python@3.11
+cd ~/PycharmProjects/crypto-agent
+pip freeze > requirements_full.txt
+rm -rf .venv
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements_full.txt
+```
+
+验证：
+
+```bash
+python -c "import ssl; print(ssl.OPENSSL_VERSION)"
+# OpenSSL 3.x.x ✅
+```
+
+面试怎么说：LibreSSL 和 OpenSSL 虽然 API 兼容，但在 TLS 握手的实现上有差异，部分外部 API 的 SSL 证书只和 OpenSSL 3.x 兼容。升级 Python 解释器是根本解法，加 `verify=False` 是绕过但有安全风险。
+
+---
+
+**Bug 3：VPN 全局模式导致国内/国外 API 同时失败**
+
+现象：CoinGecko（海外）、MiniMax（国内）、Kimi（国内）三个服务同时出现 SSL 错误或代理错误，看起来像是所有服务都挂了。
+
+根因：VPN 开了全局模式，所有流量（包括 MiniMax、Kimi 等国内 API）都走代理。代理一波动，三个服务同时失败。
+
+解决方案：VPN 切换成分流模式：
+
+- `api.coingecko.com` → 走代理
+- `api.minimaxi.com`、`api.moonshot.cn` → 直连
+
+面试怎么说：开发调试时全局代理会让所有网络请求一起波动，分流配置可以让国内 API 直连，只让境外 API 走代理，减少干扰。
+
+
+# TROUBLESHOOTING - Week 11 新增条目
+
+## 33. Supervisor 的 JSON 被 Markdown 代码块包裹，导致 `json.loads()` 失败
+
+现象：Supervisor 已经返回了正确的路由信息，但程序报错：
+
+```text
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+```
+
+打印原始输出后发现模型返回：
+
+```text
+```json
+{
+  "next_agent": "researcher",
+  "route_reason": "..."
+}
+```
+```
+
+根因：`json.loads()` 只能解析以 `{` 或 `[` 开头的纯 JSON。MiniMax 有时会在结构化输出外再包一层 Markdown 代码块，首字符变成反引号。
+
+解决：
+
+1. 先清理 `<think>...</think>` 前缀；
+2. 再去除开头的 ````json` / ```` 和结尾的 ````；
+3. 最后再执行 `json.loads()`；
+4. 解析成功后校验 `next_agent` 是否属于允许集合。
+
+核心原则：
+
+```python
+raw_content = clean_think(response.content).strip()
+raw_content = strip_json_fence(raw_content)
+decision = json.loads(raw_content)
+```
+
+面试怎么说：即使 prompt 要求“严格 JSON”，模型仍可能输出代码块或额外文本。应用层必须将“模型输出清洗”“JSON 解析”“字段白名单校验”拆开做，不能把模型输出当成可信协议。
+
+---
+
+## 34. `final_report` 已生成却仍路由到 Reporter，存在循环风险
+
+现象：Reporter 生成最终报告后，流程回到 Supervisor；如果 Supervisor 的硬规则把“已有 final_report”和“达到最大轮数”放在同一个分支里并统一跳转 Reporter，就会形成：
+
+```text
+Reporter → Supervisor → Reporter → Supervisor → ...
+```
+
+根因：把“正常完成任务”和“被迫收敛输出”混为同一种状态处理。
+
+- `final_report` 非空：代表任务完成，应该结束；
+- `route_count >= max_route_count` 且 final_report 为空：代表需要基于已有信息强制收敛，才应该派发 Reporter。
+
+解决：把两个 Python 业务硬规则明确分开：
+
+```text
+final_report 非空
+→ Command(goto=END)
+
+达到最大路由次数且尚无报告
+→ Command(goto="reporter_node")
+```
+
+面试怎么说：防循环不能只依赖框架的 recursion limit。必须先定义业务完成条件，再用最大轮数做兜底；否则“完成状态”本身可能被错误地当成下一轮任务输入。
+
+---
+
+## 35. Supervisor 已获取市场数据后仍重复派发 Researcher
+
+现象：在“现在加密市场整体行情如何？”的 Multi-Agent Eval 中，Supervisor 首轮已调用 `get_market` 并写入 `market_data`，但后续仍再次选择 Researcher，造成：
+
+```text
+Researcher → Researcher → Analyst → Reporter
+```
+
+同一个 `get_market` 被重复调用，最后因步骤数超过 case 上限而 Rule Eval 失败。
+
+根因：
+
+1. Supervisor 主要依赖 LLM 根据自然语言 State 摘要判断“数据是否足够”；
+2. State 中虽然有 `market_data`，但没有单独记录“该问题的事实获取任务已完成”；
+3. 当前没有针对同一角色/同一工具的重复次数做确定性限制。
+
+当前处理：保留该失败样本，用于说明 LLM 路由的工程边界；已有 `route_count` 和 `max_route_count` 作为最终防循环保险。
+
+后续改进方向：
+
+- 在 State 中增加 `completed_tasks` 或 `tools_used`；
+- 将“数据已满足当前问题”转为可检查的结构化状态；
+- 对同一工具、Researcher 或路由目标增加最大次数；
+- 在 LLM 路由前加入确定性规则兜底。
+
+面试怎么说：Multi-Agent 的难点不只是“多几个 Agent”，而是路由收敛。LLM 路由可解释但不完全稳定，生产场景需要“LLM 决策 + 规则约束”的混合策略。
+
+---
+
+## 36. 交互式 Agent 脚本不能直接被 Eval import
+
+现象：Day 3 / Day 4 的 Multi-Agent 文件底部有：
+
+```python
+while True:
+    user_input = input("请输入要查询的问题：")
+```
+
+Eval 脚本若直接 import 这些模块，会在导入阶段进入 CLI 循环并阻塞，无法执行批量 case。
+
+根因：图构建逻辑与终端交互入口写在同一个模块顶层，模块同时承担“可执行脚本”和“可复用库”两种角色。
+
+本周处理：为了不改动已经手动验证通过的交互式 Agent 文件，在 `scripts/run_multi_agent_eval.py` 中维护了一份独立的图逻辑快照，专门用于评估。它输出独立结果文件，不覆盖 Week 10 Eval 结果。
+
+这个方案的取舍：
+
+- 优点：低风险、快速完成独立 Multi-Agent Eval，不影响交互式调试版本；
+- 缺点：图逻辑存在重复，后续修改时可能漂移。
+
+后续工程化方案：把图构建抽成 `build_graph()` 或 factory 函数；CLI 入口只负责 `input()`、打印 trace 和调用 graph。这样 Eval、API、Streamlit 都可以复用同一张图。
+
+面试怎么说：这是“可运行脚本”和“可复用模块”边界不清的问题。本轮为了控制项目节奏选择了测试快照；后续生产化再抽图工厂，体现了先交付可验证结果、再处理抽象重复的工程权衡。

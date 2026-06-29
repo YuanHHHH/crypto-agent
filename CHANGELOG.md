@@ -1,5 +1,74 @@
 # Changelog
 
+## v0.11 - Week 11：Multi-Agent 协作与路由评估
+
+### Added
+
+**Multi-Agent 工作流**
+
+- 新增固定流程 Multi-Agent：`src/agent/langraph_multi_agent.py`
+  - 固定链路：`Researcher → ToolNode → Research Finalize → Analyst → Reporter`
+  - Researcher 只使用市场数据与 RAG 工具；Analyst 与 Reporter 不直接调用工具
+  - `research_finalize_node` 将 ToolMessage 归一化写入 `market_data`、`research_notes` 与 `errors`
+
+- 新增 Supervisor Multi-Agent：`src/agent/langgraph_supervisor_multi_agents.py`
+  - Supervisor 根据共享 State 动态选择 `researcher`、`analyst`、`reporter` 或结束
+  - 使用 LangGraph `Command(update=..., goto=...)` 控制下一跳
+  - State 新增 `route_count`、`max_route_count`、`next_agent`、`route_reason`
+  - 支持简单任务跳过 Analyst；复杂任务走完整三角色协作
+
+**路由安全与收敛**
+
+- Supervisor 输出使用 JSON 解析、代码块清理、允许路由值白名单校验
+- `final_report` 生成后由 Python 强制进入 `END`
+- 超过 `max_route_count` 时强制交给 Reporter 基于已有信息收敛，避免无限循环
+- Researcher、Analyst、Reporter 分别采用职责隔离 prompt，限制事实编造、越权调用工具和过强市场推断
+
+**Multi-Agent Eval**
+
+- 新增 `data/eval/eval_set_multi_agent_v1.jsonl`：4 个专用 case，覆盖简单价格查询、市场概览、复杂 BTC 分析、RAG 概念解释
+- 新增 `scripts/run_multi_agent_eval.py`：独立比较单 LangGraph、固定流程 Multi-Agent、Supervisor Multi-Agent
+- 新增 `data/eval/eval_result_multi_agent_v1.jsonl`：记录 12 条运行结果
+- Eval 结果新增 `node_path`、`agent_path`、`route_decisions`、`routing_result`，用于分析角色路径和路由是否符合预期
+- 新增 `docs/week11_notes.md` 与 `docs/week11_multi_agent_eval.md`
+
+### Changed
+
+- 项目主线从“单 LangGraph Agent + Eval”扩展为“单 Agent 基线 + 固定流程 Multi-Agent + Supervisor Multi-Agent”
+- 对复杂市场分析，事实获取、分析推断与最终表达拆分为独立职责
+- README 更新为 v0.11：补充 Multi-Agent 架构、Week 11 Eval 结论和后续 Skill/MCP、Docker 计划
+
+### Fixed
+
+- 修复 Supervisor 模型输出被 ```json 代码块包裹时 `json.loads()` 直接失败的问题
+- 修复 Reporter 生成 `final_report` 后仍被错误派发到 Reporter、造成循环的风险
+- 修复 Multi-Agent Eval 不能直接 import 交互式 Agent 文件的问题：评估脚本维护独立的图逻辑快照，不触发顶层 `while input()` 循环
+
+### Known Issues
+
+- Supervisor 在市场总览 case 中曾重复派发 Researcher，导致 `get_market` 重复调用和步骤超限；后续可增加已调用工具、任务完成标记和确定性规则兜底
+- 固定流程 Researcher 为单轮工具规划，复杂市场分析中可能遗漏 `get_coin_detail`；RAG 场景也不具备基于首轮结果继续补检索的能力
+- Multi-Agent Eval 当前是 4 case 的小样本对比，用于分析路由与失败模式，不代表通用性能排名
+- `scripts/run_multi_agent_eval.py` 为避免修改交互式脚本复制了图构建逻辑；后续工程化可再抽取 `build_graph()` 工厂函数减少重复
+
+### Eval 结论
+
+本次 Multi-Agent Eval（4 个 case，3 种架构）：
+
+| 架构 | Rule Pass | 通过率 | 主要观察 |
+|------|-----------|--------|----------|
+| 单 LangGraph Agent | 3 / 4 | 75% | 简单任务链路短；复杂题工具选择未必完整 |
+| 固定流程 Multi-Agent | 3 / 4 | 75% | 路径稳定、职责清晰；简单任务存在过度编排 |
+| Supervisor Multi-Agent | 3 / 4 | 75% | 能跳过不必要角色；复杂题工具覆盖最完整；存在重复调度风险 |
+
+关键结果：
+
+- 简单价格查询中，Supervisor 路径为 `Researcher → Reporter`，成功跳过 Analyst；
+- 复杂 BTC 市场分析中，Supervisor 调用 `get_price + get_coin_detail + get_market`，是唯一满足全部预期工具与字段要求的版本；
+- Multi-Agent 不是单 Agent 的无条件替代。简单任务中单 Agent 往往更高效，Supervisor 的价值主要体现在复杂任务的职责隔离、可解释编排和可追踪路由。
+
+---
+
 ## v0.9 - Week 10：Eval 体系深度升级
 
 ### Added

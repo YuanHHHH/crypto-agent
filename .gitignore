@@ -1,7 +1,12 @@
-# 数据文件
+# 数据文件与运行产物
 data/price_history.jsonl
 data/traces/
 data/vector_db/
+data/eval/eval_result*.jsonl
+data/eval/eval_result*.md
+
+# 本地文档草稿
+docs/week10_eval_design.md
 
 # 环境变量
 .env
